@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 import seaborn as sns
 import matplotlib.pyplot as plt
+from scipy.stats import skew, kurtosis
 
 sys.path.append(Path().resolve() / "src")
 
@@ -248,3 +249,156 @@ vol = avg_price.groupby("town").agg(
 
 diagnostics = counts_summary.join(vol)
 diagnostics.sort_values(["median_monthly_n", "mom_pct_std"], ascending=[True, False])
+
+# %% [md]
+# # Descriptive summary
+# - Remember that it is still a time series, for brief overview only
+
+# %% [md]
+# ### Region table
+
+# %%
+df.groupby("region")["resale_price"].describe().sort_values(by="mean", ascending=False)
+
+# %% [md]
+# ### Town table
+
+# %%
+df.groupby("town")["resale_price"].describe().sort_values(by="mean", ascending=False)
+
+# %% [md]
+# # Visualise all
+
+# %%
+sns.histplot(data=df, x="resale_price", hue="region", kde=True, bins=30)
+
+# %% [md]
+# ### West
+
+# %%
+region = "WEST REGION"
+subset = df[df["region"] == region]
+
+stats = (
+    subset["resale_price"]
+    .agg(["count", "mean", "median", "std", "min", "max"])
+    .to_frame()
+    .rename(columns={"resale_price": region})
+)
+stats.loc["skew"] = skew(subset["resale_price"], bias=False)
+stats.loc["kurtosis"] = kurtosis(subset["resale_price"], bias=False)
+
+print(stats)
+
+sns.histplot(
+    data=subset,
+    x="resale_price",
+    hue="region",
+    kde=True,
+    bins=30,
+)
+
+# %% [md]
+# ### East
+
+# %%
+region = "EAST REGION"
+subset = df[df["region"] == region]
+
+stats = (
+    subset["resale_price"]
+    .agg(["count", "mean", "median", "std", "min", "max"])
+    .to_frame()
+    .rename(columns={"resale_price": region})
+)
+stats.loc["skew"] = skew(subset["resale_price"], bias=False)
+stats.loc["kurtosis"] = kurtosis(subset["resale_price"], bias=False)
+
+print(stats)
+
+sns.histplot(
+    data=subset,
+    x="resale_price",
+    hue="region",
+    kde=True,
+    bins=30,
+)
+
+# %% [md]
+# ### North
+
+# %%
+region = "NORTH REGION"
+subset = df[df["region"] == region]
+
+stats = (
+    subset["resale_price"]
+    .agg(["count", "mean", "median", "std", "min", "max"])
+    .to_frame()
+    .rename(columns={"resale_price": region})
+)
+stats.loc["skew"] = skew(subset["resale_price"], bias=False)
+stats.loc["kurtosis"] = kurtosis(subset["resale_price"], bias=False)
+
+print(stats)
+
+sns.histplot(
+    data=subset,
+    x="resale_price",
+    hue="region",
+    kde=True,
+    bins=30,
+)
+
+# %% [md]
+# ### North-East
+
+# %%
+region = "NORTH-EAST REGION"
+subset = df[df["region"] == region]
+
+stats = (
+    subset["resale_price"]
+    .agg(["count", "mean", "median", "std", "min", "max"])
+    .to_frame()
+    .rename(columns={"resale_price": region})
+)
+stats.loc["skew"] = skew(subset["resale_price"], bias=False)
+stats.loc["kurtosis"] = kurtosis(subset["resale_price"], bias=False)
+
+print(stats)
+
+sns.histplot(
+    data=subset,
+    x="resale_price",
+    hue="region",
+    kde=True,
+    bins=30,
+)
+
+
+# %% [md]
+# ### Central
+
+# %%
+region = "CENTRAL REGION"
+subset = df[df["region"] == region]
+
+stats = (
+    subset["resale_price"]
+    .agg(["count", "mean", "median", "std", "min", "max"])
+    .to_frame()
+    .rename(columns={"resale_price": region})
+)
+stats.loc["skew"] = skew(subset["resale_price"], bias=False)
+stats.loc["kurtosis"] = kurtosis(subset["resale_price"], bias=False)
+
+print(stats)
+
+sns.histplot(
+    data=subset,
+    x="resale_price",
+    hue="region",
+    kde=True,
+    bins=30,
+)
