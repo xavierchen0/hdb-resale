@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 import seaborn as sns
 import matplotlib.pyplot as plt
+from scipy.stats import skew, kurtosis
 
 sys.path.append(Path().resolve() / "src")
 
@@ -248,3 +249,185 @@ vol = avg_price.groupby("town").agg(
 
 diagnostics = counts_summary.join(vol)
 diagnostics.sort_values(["median_monthly_n", "mom_pct_std"], ascending=[True, False])
+
+# %% [md]
+# # Descriptive summary
+# - Remember that it is still a time series, for brief overview only
+
+# %% [md]
+# ### Region table
+
+# %%
+df.groupby("region")["resale_price"].describe().sort_values(by="mean", ascending=False)
+
+# %% [md]
+# ### Town table
+
+# %%
+df.groupby("town")["resale_price"].describe().sort_values(by="mean", ascending=False)
+
+# %% [md]
+# # Visualise all
+
+# %%
+sns.histplot(data=df, x="resale_price", hue="region", kde=True, bins=30)
+
+# %% [md]
+# ### West
+
+# %%
+region = "WEST REGION"
+subset = df[df["region"] == region]
+
+stats = (
+    subset["resale_price"]
+    .agg(["count", "mean", "median", "std", "min", "max"])
+    .to_frame()
+    .rename(columns={"resale_price": region})
+)
+stats.loc["skew"] = skew(subset["resale_price"], bias=False)
+stats.loc["kurtosis"] = kurtosis(subset["resale_price"], bias=False)
+
+print(stats)
+
+sns.histplot(
+    data=subset,
+    x="resale_price",
+    hue="region",
+    kde=True,
+    bins=30,
+)
+
+# %% [md]
+# ### East
+
+# %%
+region = "EAST REGION"
+subset = df[df["region"] == region]
+
+stats = (
+    subset["resale_price"]
+    .agg(["count", "mean", "median", "std", "min", "max"])
+    .to_frame()
+    .rename(columns={"resale_price": region})
+)
+stats.loc["skew"] = skew(subset["resale_price"], bias=False)
+stats.loc["kurtosis"] = kurtosis(subset["resale_price"], bias=False)
+
+print(stats)
+
+sns.histplot(
+    data=subset,
+    x="resale_price",
+    hue="region",
+    kde=True,
+    bins=30,
+)
+
+# %% [md]
+# ### North
+
+# %%
+region = "NORTH REGION"
+subset = df[df["region"] == region]
+
+stats = (
+    subset["resale_price"]
+    .agg(["count", "mean", "median", "std", "min", "max"])
+    .to_frame()
+    .rename(columns={"resale_price": region})
+)
+stats.loc["skew"] = skew(subset["resale_price"], bias=False)
+stats.loc["kurtosis"] = kurtosis(subset["resale_price"], bias=False)
+
+print(stats)
+
+sns.histplot(
+    data=subset,
+    x="resale_price",
+    hue="region",
+    kde=True,
+    bins=30,
+)
+
+# %% [md]
+# ### North-East
+
+# %%
+region = "NORTH-EAST REGION"
+subset = df[df["region"] == region]
+
+stats = (
+    subset["resale_price"]
+    .agg(["count", "mean", "median", "std", "min", "max"])
+    .to_frame()
+    .rename(columns={"resale_price": region})
+)
+stats.loc["skew"] = skew(subset["resale_price"], bias=False)
+stats.loc["kurtosis"] = kurtosis(subset["resale_price"], bias=False)
+
+print(stats)
+
+sns.histplot(
+    data=subset,
+    x="resale_price",
+    hue="region",
+    kde=True,
+    bins=30,
+)
+
+
+# %% [md]
+# ### Central
+
+# %%
+region = "CENTRAL REGION"
+subset = df[df["region"] == region]
+
+stats = (
+    subset["resale_price"]
+    .agg(["count", "mean", "median", "std", "min", "max"])
+    .to_frame()
+    .rename(columns={"resale_price": region})
+)
+stats.loc["skew"] = skew(subset["resale_price"], bias=False)
+stats.loc["kurtosis"] = kurtosis(subset["resale_price"], bias=False)
+
+print(stats)
+
+sns.histplot(
+    data=subset,
+    x="resale_price",
+    hue="region",
+    kde=True,
+    bins=30,
+)
+
+# %% [md]
+# ### Visualise town
+
+# %%
+towns = df["town"].unique().tolist()
+
+for town in towns:
+    subset = df[df["town"] == town]
+
+    stats = (
+        subset["resale_price"]
+        .agg(["count", "mean", "median", "std", "min", "max"])
+        .to_frame()
+        .rename(columns={"resale_price": town})
+    )
+    stats.loc["skew"] = skew(subset["resale_price"], bias=False)
+    stats.loc["kurtosis"] = kurtosis(subset["resale_price"], bias=False)
+
+    from IPython.display import display
+
+    display(stats.T.round(2))
+    plt.figure(figsize=(6, 4))
+    sns.histplot(data=subset, x="resale_price", kde=True, bins=30, color="steelblue")
+    plt.title(f"{town} — Resale Price Distribution")
+    plt.xlabel("Resale Price (SGD)")
+    plt.ylabel("Count")
+    plt.tight_layout()
+    plt.show()
