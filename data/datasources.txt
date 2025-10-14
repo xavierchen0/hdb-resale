@@ -1,0 +1,8 @@
+# HDB Resale Price Dataset
+https://data.gov.sg/collections/189/view
+
+# Towns dataset
+https://data.gov.sg/collections/2104/datasets/d_4765db0e87b9c86336792efe8a1f7a66/view
+
+# Regions dataset
+https://data.gov.sg/datasets/d_bf4d24df9129d5a8ff8cf82e20959ee0/view
