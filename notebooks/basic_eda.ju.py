@@ -6,17 +6,26 @@
 # # Generate Report
 
 # %%
+import sys
+from pathlib import Path
 import pandas as pd
-from ydata_profiling import ProfileReport
+# !!! Don't create report with current environment; there is an issue
+# Use the already generated html file
+# from ydata_profiling import ProfileReport
+
+# Allow importing from src/
+sys.path.append(str(Path().resolve().parent / "src"))
+
+from src.config import DATA_DIR
 
 # Ensure you are at the root directory
-HDB_TXN_DATA_FP = "data/data.csv"
+HDB_TXN_DATA_FP = DATA_DIR / "data.csv"
 HDB_TXN_REPORT_FP = "data/hdb_txn_raw_report.html"
 
 raw_df = pd.read_csv(HDB_TXN_DATA_FP)
-
-profile = ProfileReport(raw_df, title="EDA on Raw Dataset")
-profile.to_file(HDB_TXN_REPORT_FP)
+raw_df
+# profile = ProfileReport(raw_df, title="EDA on Raw Dataset")
+# profile.to_file(HDB_TXN_REPORT_FP)
 
 # %% [md]
 # # Insights
