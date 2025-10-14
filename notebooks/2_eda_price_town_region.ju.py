@@ -402,3 +402,32 @@ sns.histplot(
     kde=True,
     bins=30,
 )
+
+# %% [md]
+# ### Visualise town
+
+# %%
+towns = df["town"].unique().tolist()
+
+for town in towns:
+    subset = df[df["town"] == town]
+
+    stats = (
+        subset["resale_price"]
+        .agg(["count", "mean", "median", "std", "min", "max"])
+        .to_frame()
+        .rename(columns={"resale_price": town})
+    )
+    stats.loc["skew"] = skew(subset["resale_price"], bias=False)
+    stats.loc["kurtosis"] = kurtosis(subset["resale_price"], bias=False)
+
+    from IPython.display import display
+
+    display(stats.T.round(2))
+    plt.figure(figsize=(6, 4))
+    sns.histplot(data=subset, x="resale_price", kde=True, bins=30, color="steelblue")
+    plt.title(f"{town} — Resale Price Distribution")
+    plt.xlabel("Resale Price (SGD)")
+    plt.ylabel("Count")
+    plt.tight_layout()
+    plt.show()
