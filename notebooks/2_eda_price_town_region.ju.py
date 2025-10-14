@@ -44,3 +44,207 @@ sns.heatmap(corr, annot=True, cmap="coolwarm", vmin=0.5, vmax=1)
 # %%
 corr = pivot.corr(method="spearman")
 sns.heatmap(corr, annot=True, cmap="coolwarm", vmin=0.5, vmax=1)
+
+# %% [md]
+# # Average Price vs Town
+
+# %% [md]
+# ## West Region
+
+# %%
+df_monthly_town = (
+    df[df["region"] == "WEST REGION"]
+    .groupby(["month", "town"])["resale_price"]
+    .mean()
+    .reset_index()
+)
+
+plt.figure(figsize=(12, 6))
+
+sns.lineplot(data=df_monthly_town, x="month", y="resale_price", hue="town")
+
+# %% [md]
+# ### Correlation analysis
+# - Strong correlation across regions
+
+# %%
+pivot = df_monthly_town.pivot(index="month", columns="town", values="resale_price")
+pivot.sort_index()
+pivot.head()
+
+# %%
+corr = pivot.corr(method="pearson")
+sns.heatmap(corr, annot=True, cmap="coolwarm", vmin=0.5, vmax=1)
+
+# %%
+corr = pivot.corr(method="spearman")
+sns.heatmap(corr, annot=True, cmap="coolwarm", vmin=0.5, vmax=1)
+
+# %% [md]
+# ## North Region
+
+# %%
+df_monthly_town = (
+    df[df["region"] == "NORTH REGION"]
+    .groupby(["month", "town"])["resale_price"]
+    .mean()
+    .reset_index()
+)
+
+plt.figure(figsize=(12, 6))
+
+sns.lineplot(data=df_monthly_town, x="month", y="resale_price", hue="town")
+
+# %% [md]
+# ### Correlation analysis
+# - Strong correlation across regions
+
+# %%
+pivot = df_monthly_town.pivot(index="month", columns="town", values="resale_price")
+pivot.sort_index()
+pivot.head()
+
+# %%
+corr = pivot.corr(method="pearson")
+sns.heatmap(corr, annot=True, cmap="coolwarm", vmin=0.5, vmax=1)
+
+# %%
+corr = pivot.corr(method="spearman")
+sns.heatmap(corr, annot=True, cmap="coolwarm", vmin=0.5, vmax=1)
+
+# %% [md]
+# ## East Region
+
+# %%
+df_monthly_town = (
+    df[df["region"] == "EAST REGION"]
+    .groupby(["month", "town"])["resale_price"]
+    .mean()
+    .reset_index()
+)
+
+plt.figure(figsize=(12, 6))
+
+sns.lineplot(data=df_monthly_town, x="month", y="resale_price", hue="town")
+
+# %% [md]
+# ### Correlation analysis
+# - Strong correlation across regions
+
+# %%
+pivot = df_monthly_town.pivot(index="month", columns="town", values="resale_price")
+pivot.sort_index()
+pivot.head()
+
+# %%
+corr = pivot.corr(method="pearson")
+sns.heatmap(corr, annot=True, cmap="coolwarm", vmin=0.5, vmax=1)
+
+# %%
+corr = pivot.corr(method="spearman")
+sns.heatmap(corr, annot=True, cmap="coolwarm", vmin=0.5, vmax=1)
+
+# %% [md]
+# ## North east Region
+
+# %%
+df_monthly_town = (
+    df[df["region"] == "NORTH-EAST REGION"]
+    .groupby(["month", "town"])["resale_price"]
+    .mean()
+    .reset_index()
+)
+
+plt.figure(figsize=(12, 6))
+
+sns.lineplot(data=df_monthly_town, x="month", y="resale_price", hue="town")
+
+# %% [md]
+# ### Correlation analysis
+# - Strong correlation across regions
+
+# %%
+pivot = df_monthly_town.pivot(index="month", columns="town", values="resale_price")
+pivot.sort_index()
+pivot.head()
+
+# %%
+corr = pivot.corr(method="pearson")
+sns.heatmap(corr, annot=True, cmap="coolwarm", vmin=0.5, vmax=1)
+
+# %%
+corr = pivot.corr(method="spearman")
+sns.heatmap(corr, annot=True, cmap="coolwarm", vmin=0.5, vmax=1)
+
+
+# %% [md]
+# ## Central Region
+
+# %%
+df_monthly_town = (
+    df[df["region"] == "CENTRAL REGION"]
+    .groupby(["month", "town"])["resale_price"]
+    .mean()
+    .reset_index()
+)
+
+plt.figure(figsize=(12, 6))
+
+sns.lineplot(data=df_monthly_town, x="month", y="resale_price", hue="town")
+
+# %% [md]
+# ### Correlation analysis
+# ### Why the Central Region correlation map looks like this
+# - Thin samples in some towns (e.g., `CENTRAL AREA`, `MARINE PARADE`) lead to noisy monthly means; noise weakens pairwise correlations.
+# - Highly heterogeneous stock: older towns (e.g., `QUEENSTOWN`, `TOA PAYOH`) with pronounced lease-decay effects vs. renewal/younger blocks in `BUKIT MERAH` / `KALLANG/WHAMPOA`.
+# - Micro-location premia (CBD/MRT proximity, modernised precincts, sea views) drive idiosyncratic month-to-month shifts that do not synchronize across towns.
+# - Policy segmentation (e.g., PLH from 2021) narrows buyer pools for prime projects, creating dynamics less aligned with non-PLH towns.
+# - Asynchronous supply (BTO/SPR completions, upgrading cycles) varies by town and time, introducing timing mismatches in price moves.
+
+# %%
+pivot = df_monthly_town.pivot(index="month", columns="town", values="resale_price")
+pivot.sort_index()
+pivot.head()
+
+# %%
+corr = pivot.corr(method="pearson")
+sns.heatmap(corr, annot=True, cmap="coolwarm", vmin=0.5, vmax=1)
+
+# %%
+corr = pivot.corr(method="spearman")
+sns.heatmap(corr, annot=True, cmap="coolwarm", vmin=0.5, vmax=1)
+
+# %% [md]
+# ### Quick diagnostics: sample size and volatility
+# The table below shows each Central Region town's transaction depth and volatility metrics.
+# Lower median monthly counts and higher short-horizon volatility typically correspond to weaker cross-town correlations.
+
+# %%
+central = df[df["region"] == "CENTRAL REGION"].copy()
+
+# Monthly counts per town
+counts = central.groupby(["town", "month"]).size().rename("n").reset_index()
+
+counts_summary = counts.groupby("town").agg(
+    months_with_txn=("n", "size"),
+    total_txn=("n", "sum"),
+    median_monthly_n=("n", "median"),
+)
+
+# Volatility of MoM % change in avg resale price (higher = noisier)
+avg_price = (
+    central.groupby(["town", "month"])
+    .agg(avg_price=("resale_price", "mean"))
+    .reset_index()
+)
+avg_price = avg_price.sort_values(["town", "month"]).assign(
+    mom_pct=lambda d: d.groupby("town")["avg_price"].pct_change() * 100
+)
+
+vol = avg_price.groupby("town").agg(
+    mom_pct_std=("mom_pct", "std"),
+    mom_pct_iqr=("mom_pct", lambda x: x.quantile(0.75) - x.quantile(0.25)),
+)
+
+diagnostics = counts_summary.join(vol)
+diagnostics.sort_values(["median_monthly_n", "mom_pct_std"], ascending=[True, False])
