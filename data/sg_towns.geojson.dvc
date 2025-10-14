@@ -1,0 +1,5 @@
+outs:
+- md5: 09ed0ca0556d315cf4a80a2c6637f4b3
+  size: 1969776
+  hash: md5
+  path: sg_towns.geojson
