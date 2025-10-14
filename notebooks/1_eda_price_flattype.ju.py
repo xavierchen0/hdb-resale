@@ -16,6 +16,7 @@ import plotly.express as px
 import json
 import sys
 from pathlib import Path
+import numpy as np
 
 sys.path.append(Path().resolve() / "src")
 
@@ -140,3 +141,105 @@ sns.heatmap(corr, annot=True, cmap="coolwarm", vmin=0.5, vmax=1)
 
 # %%
 len(df[df["flat_type"] == "MULTI-GENERATION"]) / len(df) * 100
+
+# %% [md]
+# # Year on Year Growth change
+
+# %% [md]
+# ## All
+
+# %%
+df_monthly_flattype_pct = df_monthly_flattype.sort_values(
+    ["flat_type", "month"]
+).assign(
+    yoy_growth=df_monthly_flattype.groupby("flat_type")["resale_price"].pct_change(
+        periods=12
+    )
+    * 100
+)
+
+plt.figure(figsize=(12, 6))
+sns.lineplot(data=df_monthly_flattype_pct, x="month", y="yoy_growth", hue="flat_type")
+plt.axhline(y=0, color="gray", linestyle="--", linewidth=3)
+
+# %% [md]
+# ## Narrow focus
+
+# %%
+plt.figure(figsize=(12, 6))
+filter = (
+    # (df_monthly_flattype_pct["flat_type"] == "1 ROOM")
+    (df_monthly_flattype_pct["flat_type"] == "2 ROOM")
+    | (df_monthly_flattype_pct["flat_type"] == "3 ROOM")
+)
+sns.lineplot(
+    data=df_monthly_flattype_pct[filter], x="month", y="yoy_growth", hue="flat_type"
+)
+plt.axhline(y=0, color="gray", linestyle="--", linewidth=3)
+
+# %% [md]
+# # CAGR per flat type
+# **Market Insight: Compound Annual Growth Rate (CAGR) by Flat Type (2017–2024)**
+
+# **Overview**
+# The chart compares the compound annual growth rate (CAGR) of HDB resale prices across different flat types between 2017 and 2024.
+# It shows how various flat segments have appreciated at different rates over the long term, reflecting structural differences in demand, affordability, and policy effects.
+
+# **Key Findings**
+# - 3-room flats recorded the highest CAGR at approximately **7.5%**, outperforming all other categories.
+# - Mid-sized flats (4-room and 5-room) appreciated steadily at around **5.3%**, indicating strong and consistent upgrader demand.
+# - Multi-generation flats achieved a solid **5.9% CAGR**, showing niche but healthy growth despite lower transaction volumes.
+# - 2-room flats saw moderate appreciation (**5.3%**), while 1-room flats lagged slightly (**3.6%**), reflecting limited market size and liquidity.
+# - Executive flats underperformed significantly with only **1.25% CAGR**, highlighting weak resale demand and affordability constraints in this segment.
+
+# **Interpretation**
+# 1. The dominance of 3-room flats suggests increasing demand for smaller, more affordable homes—likely driven by policy grants, affordability pressures, and changing household structures.
+# 2. 4-room and 5-room flats continue to anchor the resale market, showing steady, broad-based appreciation aligned with upgrader family demand.
+# 3. Executive flats’ weak growth points to financing limitations and reduced buyer interest in larger, high-priced units amid rising interest rates.
+# 4. The healthy performance of multi-generation flats indicates rising appeal of multigenerational living and scarcity premiums for large units post-pandemic.
+
+# **Market Implications**
+# - The market’s growth leadership shifted toward smaller and mid-sized flats, signaling a structural change in housing demand patterns.
+# - Affordability and policy support (e.g., Enhanced CPF Housing Grant, BTO delays) have likely amplified demand for 3-room and 4-room flats.
+# - Future price resilience may be strongest in these core segments, while larger flats may continue to underperform due to limited affordability and liquidity.
+
+# **Conclusion**
+# Between 2017 and 2024, the HDB resale market experienced broad-based price growth, but appreciation was uneven across flat types.
+# 3-room flats emerged as the top-performing segment, reflecting a long-term demand shift toward affordability and efficiency.
+# The consistent growth in 4-room and 5-room flats underscores their continued role as the market’s backbone, while the lag in executive flats highlights potential saturation in the high-end public housing segment.
+
+# %%
+df_flattype_cagr = (
+    df.groupby("flat_type")
+    .agg(
+        start_price=("resale_price", "first"),
+        end_price=("resale_price", "last"),
+        n_years=("month", lambda x: (x.max() - x.min()).days / 365),
+    )
+    .assign(
+        cagr=lambda d: ((d["end_price"] / d["start_price"]) ** (1 / d["n_years"]) - 1)
+        * 100
+    )
+)
+
+plt.figure(figsize=(12, 6))
+
+ax = sns.barplot(
+    data=df_flattype_cagr,
+    x="flat_type",
+    y="cagr",
+)
+
+avg_cagr = df_flattype_cagr["cagr"].mean()
+ax.axhline(
+    y=avg_cagr,
+    color="gray",
+    linestyle="--",
+    linewidth=3,
+    label="0",
+)
+
+ax.text(x=-0.5, y=avg_cagr + 0.1, s=f"Avg: {avg_cagr:.2f}%")
+
+for container in ax.containers:
+    ax.bar_label(container, fmt="%.2f%%", label_type="edge", padding=3)
