@@ -18,11 +18,13 @@ import sys
 from pathlib import Path
 import numpy as np
 
-sys.path.append(Path().resolve() / "src")
+project_root = Path().resolve().parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from src.config import DATA_DIR
 
-df = pd.read_pickle(DATA_DIR / "cleaned_data.pkl")
+df = pd.read_pickle(DATA_DIR / "cleaned_rawdata.pkl")
 df
 
 # %% [md]

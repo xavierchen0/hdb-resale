@@ -14,7 +14,9 @@ import pandas as pd
 # from ydata_profiling import ProfileReport
 
 # Allow importing from src/
-sys.path.append(str(Path().resolve().parent / "src"))
+project_root = Path().resolve().parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from src.config import DATA_DIR
 
