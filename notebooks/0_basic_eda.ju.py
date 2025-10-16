@@ -14,7 +14,9 @@ import pandas as pd
 # from ydata_profiling import ProfileReport
 
 # Allow importing from src/
-sys.path.append(str(Path().resolve().parent / "src"))
+project_root = Path().resolve().parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from src.config import DATA_DIR
 
@@ -129,7 +131,30 @@ df1 = pd.read_csv(
     },
     parse_dates=["month", "lease_commence_date"],
 )
+df1.dtypes
 
+# %% [md]
+# ## Remove the month October 2025 (2025-10)
+
+# %%
+print(f"Initial No. of Observations: {len(df1):,}")
+
+EXCLUDE_MONTH_STRING = "2025-10"
+
+CNT_EXCLUDE_MONTH_ROWS = len(df1[df1["month"] == EXCLUDE_MONTH_STRING])
+
+print(f"Number of rows with {EXCLUDE_MONTH_STRING}: {CNT_EXCLUDE_MONTH_ROWS}")
+
+df1 = df1[df1["month"] != EXCLUDE_MONTH_STRING].copy()
+df1.reset_index(drop=True, inplace=True)
+print(f"No. of Observations after excluding {EXCLUDE_MONTH_STRING}: {len(df1):,}")
+
+df1.dtypes
+
+# %% [md]
+# ## Change `remaining_lease` to months
+
+# %%
 # Split the col `remaining_lease`
 df1[["year1", "year2", "month1", "month2"]] = df1["remaining_lease"].str.split(
     " ", expand=True
@@ -165,6 +190,7 @@ df1.dtypes
 # ```
 
 # %%
+df1.sort_values(by="month", ascending=True, inplace=True, ignore_index=True)
 df1 = df1.drop_duplicates(ignore_index=True)  # Keep first occurrence
 
 # %% [md]
@@ -198,4 +224,4 @@ df1.dtypes
 df1
 
 # %%
-df1.to_pickle("data/cleaned_data.pkl")
+df1.to_pickle("data/cleaned_rawdata.pkl")

@@ -1,0 +1,5 @@
+outs:
+- md5: d502655628c5ca7d462227518bf177dc
+  size: 8268039
+  hash: md5
+  path: cleaned_rawdata.pkl
