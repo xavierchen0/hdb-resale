@@ -1,0 +1,5 @@
+outs:
+- md5: 0aa9b6c34dc6f3a3436d642883459f5e
+  size: 433233
+  hash: md5
+  path: gtwr_paper.pdf
