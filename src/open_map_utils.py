@@ -32,3 +32,25 @@ def _authenticate():
 
 # Get access token from One Map
 ACCESS_TOKEN = _authenticate()
+
+
+def openmap_search(searchVal, returnGeom="Y", getAddrDetails="Y", pageNum=1):
+    """
+    https://www.onemap.gov.sg/apidocs/search
+
+    Returns query results
+    """
+    url = "https://www.onemap.gov.sg/api/common/elastic/search"
+
+    params = {
+        "searchVal": searchVal,
+        "returnGeom": returnGeom,
+        "getAddrDetails": getAddrDetails,
+        "pageNum": pageNum,
+    }
+
+    headers = {"Authorization": ACCESS_TOKEN}
+
+    response = requests.get(url, params=params, headers=headers)
+
+    return response
