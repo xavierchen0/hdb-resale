@@ -1,9 +1,18 @@
-#!/usr/bin/env python
-# coding: utf-8
+# ---
+# jupyter:
+#   jupytext:
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.17.3
+#   kernelspec:
+#     display_name: Python (.venv)
+#     language: python
+#     name: .venv
+# ---
 
-# In[ ]:
-
-
+# %%
 import sys
 from pathlib import Path
 import pandas as pd
@@ -12,28 +21,19 @@ project_root = Path().resolve().parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-
-# In[ ]:
-
-
+# %%
 from src.config import DATA_DIR
 
 df = pd.read_pickle(DATA_DIR / "cleaned_rawdata.pkl")
 df
 
-
-# In[ ]:
-
-
+# %%
 COE_DATA = DATA_DIR / "COE.csv"
 
 df_coe = pd.read_csv(COE_DATA)
 df_coe
 
-
-# In[ ]:
-
-
+# %%
 df_coe["month"] = pd.to_datetime(df_coe["month"])
 START_DATE = "2017-01-01"
 END_DATE = "2025-09-01"
@@ -46,19 +46,13 @@ df_coe1 = df_coe[
 ].copy().reset_index()
 df_coe1
 
-
-# In[ ]:
-
-
+# %%
 # filter cat A and B
 relevant_categories = ["Category A", "Category B"]
 df_coe_filtered = df_coe1[df_coe1["vehicle_class"].isin(relevant_categories)].copy().reset_index()
 df_coe_filtered
 
-
-# In[ ]:
-
-
+# %%
 #take the mean of both bids
 df_coe_pivot = df_coe_filtered.pivot_table(
     index="month",
@@ -82,19 +76,13 @@ df_merged1 = pd.merge(
 
 df_merged1
 
-
-# In[ ]:
-
-
+# %%
 CPI_DATA = DATA_DIR / "CPI.csv"
 
 df_cpi = pd.read_csv(CPI_DATA)
 df_cpi.dtypes
 
-
-# In[ ]:
-
-
+# %%
 df_cpi_long = df_cpi.melt(
     id_vars=["DataSeries"],
     var_name="month_str",
@@ -103,10 +91,7 @@ df_cpi_long = df_cpi.melt(
 
 df_cpi_long
 
-
-# In[ ]:
-
-
+# %%
 df_cpi_all = df_cpi_long[df_cpi_long["DataSeries"] == "All Items"].copy()
 
 
@@ -118,10 +103,7 @@ df_cpi_all["month"] = pd.to_datetime(
 df_cpi_all["cpi_index"] = pd.to_numeric(df_cpi_all["cpi_index"], errors="coerce")
 df_cpi_all.dtypes
 
-
-# In[ ]:
-
-
+# %%
 df_cpi_final = df_cpi_all[
     (df_cpi_all["month"] >= START_DATE) & 
     (df_cpi_all["month"] <= END_DATE)
@@ -129,24 +111,18 @@ df_cpi_final = df_cpi_all[
 
 df_cpi_final
 
-
-# In[ ]:
-
-
+# %%
 last_cpi_value = df_cpi_final["cpi_index"].iloc[0] 
-
+    
 new_row = pd.DataFrame({
     "month": [END_DATE], 
     "cpi_index": [last_cpi_value]
 })
-
+    
 df_cpi_final = pd.concat([df_cpi_final, new_row], ignore_index=True)
 df_cpi_final
 
-
-# In[ ]:
-
-
+# %%
 # merge
 df_merged2 = pd.merge(
     df_merged1,
@@ -157,19 +133,13 @@ df_merged2 = pd.merge(
 
 df_merged2
 
-
-# In[ ]:
-
-
+# %%
 PPI_DATA = DATA_DIR / "Private_Property_Index.csv"
 
 df_ppi = pd.read_csv(PPI_DATA)
 df_ppi
 
-
-# In[ ]:
-
-
+# %%
 df_ppi_filtered = df_ppi[df_ppi["property_type"] == "All Residential"].copy()
 
 # Filter by date range
@@ -180,10 +150,7 @@ df_ppi_filtered = df_ppi_filtered[
 
 df_ppi_filtered
 
-
-# In[ ]:
-
-
+# %%
 from utils.convert_quarters import convert_quarter_to_date
 
 df_ppi_filtered["month_start"] = df_ppi_filtered["quarter"].apply(convert_quarter_to_date)
@@ -192,10 +159,7 @@ df_ppi_monthly = df_ppi_upsampled["index"].resample("M").ffill().resample("MS").
 
 df_ppi_monthly
 
-
-# In[ ]:
-
-
+# %%
 date_range = pd.date_range(start=df_ppi_monthly.index.min(), end=END_DATE, freq="MS")
 
 # Re-index the DataFrame to the complete range
@@ -206,10 +170,7 @@ df_ppi_monthly.rename(columns={'index': 'private_property_index'}, inplace=True)
 
 df_ppi_monthly
 
-
-# In[ ]:
-
-
+# %%
 df_merged3 = pd.merge(
     df_merged2, 
     df_ppi_monthly,
@@ -219,9 +180,5 @@ df_merged3 = pd.merge(
 
 df_merged3
 
-
-# In[ ]:
-
-
+# %%
 df_merged3.to_pickle("../data/feat_data.pkl")
-
