@@ -72,6 +72,13 @@ gdf = gdf.rename(columns={"index": "txn_id"})
 gdf
 
 # %% [md]
+# Set datatype of region
+
+# %%
+gdf["region"] = gdf["region"].astype("category")
+gdf.dtypes
+
+# %% [md]
 # # Export base dataset
 
 # %%
