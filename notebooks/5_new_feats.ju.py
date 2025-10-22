@@ -346,8 +346,8 @@ df_hi_monthly.ffill(inplace=True)
 df_hi_monthly
 
 # %%
-#overwrite 2024-2025 with annuliased change of 1.9
-ANNUALISED_VALUE = 1.9
+#overwrite 2025 with annuliased change of 1.3
+ANNUALISED_VALUE = 1.3
 start_of_2025 = pd.to_datetime('2025-01-01')
 df_hi_monthly.loc[df_hi_monthly.index >= start_of_2025, "income_change"] = ANNUALISED_VALUE
 
