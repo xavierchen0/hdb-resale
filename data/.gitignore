@@ -6,6 +6,7 @@
 /cleaned_rawdata.pkl
 /partial_dataset_1.parquet
 /base_dataset.parquet
+/Household_Income.csv
 /COE.csv
 /CPI.csv
 /Private_Property_Index.csv
@@ -18,3 +19,5 @@
 /lta_mrt_station_exit.geojson
 /BusStopLocation_Aug2025.zip
 /sg_finalfac_loc.parquet
+/newfeats_data.parquet
+/feat_coe.parquet
