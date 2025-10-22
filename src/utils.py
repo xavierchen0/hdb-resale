@@ -63,3 +63,8 @@ def get_geo_data_for_each_row(row):
         "latitude": latitude,
         "longitude": longitude,
     }
+
+
+def chunked(lst, size):
+    for i in range(0, len(lst), size):
+        yield i // size, lst[i : i + size]  # (batch_index, slice)
