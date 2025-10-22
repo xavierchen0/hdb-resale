@@ -1,0 +1,5 @@
+outs:
+- md5: 7b6565c7d860a2585778b658e8d880d7
+  size: 582164
+  hash: md5
+  path: part_00001.pkl
