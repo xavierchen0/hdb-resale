@@ -1,5 +1,5 @@
 outs:
-- md5: e741ee363917d921dffec17af49b5a81
-  size: 1364531
+- md5: 5bf704db7d696a6cdc16c45ea11c196a
+  size: 1362685
   hash: md5
   path: sg_regions.geojson
