@@ -5,3 +5,4 @@
 /sg_towns_regions.csv
 /cleaned_rawdata.pkl
 /partial_dataset_1.parquet
+/base_dataset.parquet
