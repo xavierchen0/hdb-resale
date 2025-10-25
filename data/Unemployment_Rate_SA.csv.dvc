@@ -1,0 +1,5 @@
+outs:
+- md5: 79aefa34fb495f2115e570ef086fbf34
+  size: 2562
+  hash: md5
+  path: Unemployment_Rate_SA.csv
