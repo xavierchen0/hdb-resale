@@ -1,0 +1,5 @@
+outs:
+- md5: 22f80f29be7fc460cffae47a8bc35dd1
+  size: 1469
+  hash: md5
+  path: household_income.csv
