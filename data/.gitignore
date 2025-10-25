@@ -8,4 +8,5 @@
 /base_dataset.parquet
 /COE.csv
 /CPI.csv
+/feat_coe.parquet
 /feat_cpi.parquet
