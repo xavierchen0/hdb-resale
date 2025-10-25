@@ -1,0 +1,5 @@
+outs:
+- md5: 2cc0b6e64e8223cb3f52455427c3237c
+  size: 6997
+  hash: md5
+  path: feat_cpi.parquet

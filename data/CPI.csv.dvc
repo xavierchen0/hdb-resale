@@ -1,0 +1,5 @@
+outs:
+- md5: 391ce95d4d631f7f1311ac41e1b31cc5
+  size: 639526
+  hash: md5
+  path: CPI.csv
