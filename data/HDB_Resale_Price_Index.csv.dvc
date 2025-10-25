@@ -1,0 +1,5 @@
+outs:
+- md5: 2221b9c033079e7a9beef812d94f2ff6
+  size: 1899
+  hash: md5
+  path: HDB_Resale_Price_Index.csv
