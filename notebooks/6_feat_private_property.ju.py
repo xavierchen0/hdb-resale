@@ -304,4 +304,4 @@ df_ppi_pivot.dtypes
 # # Export
 
 # %%
-df_ppi_pivot.to_parquet(DATA_DIR / "feat_private_property.parquet")
+df_ppi_pivot.to_parquet(DATA_DIR / "feat" / "feat_private_property.parquet")

@@ -10,10 +10,5 @@
 /CPI.csv
 /Private_Property_Index.csv
 /Unemployment_Rate_SA.csv
-/feat_coe.parquet
-/feat_cpi.parquet
 /HDB_Resale_Price_Index.csv
-/feat_private_property.parquet
-/feat_unemployment.parquet
 /household_income.csv
-/feat_income.parquet

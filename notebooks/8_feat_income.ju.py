@@ -331,4 +331,4 @@ df_long_median
 # # Export
 
 # %%
-df_long_median.to_parquet(DATA_DIR / "feat_income.parquet")
+df_long_median.to_parquet(DATA_DIR / "feat" / "feat_income.parquet")

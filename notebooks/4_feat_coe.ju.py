@@ -157,4 +157,4 @@ df_export = df_merged[
 df_export
 
 # %%
-df_export.to_parquet(DATA_DIR / "feat_coe.parquet")
+df_export.to_parquet(DATA_DIR / "feat" / "feat_coe.parquet")

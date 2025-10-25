@@ -135,4 +135,4 @@ df_cpi_final
 # # Export data
 
 # %%
-df_cpi_final.to_parquet(DATA_DIR / "feat_cpi.parquet")
+df_cpi_final.to_parquet(DATA_DIR / "feat" / "feat_cpi.parquet")
