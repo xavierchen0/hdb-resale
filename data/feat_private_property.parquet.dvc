@@ -1,0 +1,5 @@
+outs:
+- md5: 9fd13183a03ceb146bf71d43956e09b1
+  size: 26376
+  hash: md5
+  path: feat_private_property.parquet
