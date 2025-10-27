@@ -1,5 +1,5 @@
 outs:
-- md5: 43a7701a52935ec133a492cfec85914a
-  size: 28255
+- md5: eff4bc0f49cd757ebd5b6010f9b475a0
+  size: 27544
   hash: md5
   path: feat_income.parquet
