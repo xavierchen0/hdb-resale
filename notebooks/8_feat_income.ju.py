@@ -133,13 +133,6 @@ df_long_median["income_yoy_std5"] = (
 df_long_median
 
 # %% [md]
-# Add income yoy diff (for detection acceleration and deceleration)
-
-# %%
-df_long_median["income_yoy_diff"] = df_long_median["inc_pct_change"].diff()
-df_long_median
-
-# %% [md]
 # Filter for the correct dates
 
 # %%
