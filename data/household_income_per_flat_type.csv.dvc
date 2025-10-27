@@ -1,0 +1,5 @@
+outs:
+- md5: ccee2f2144d380249cfd7ddbe32bae2d
+  size: 1204
+  hash: md5
+  path: household_income_per_flat_type.csv
