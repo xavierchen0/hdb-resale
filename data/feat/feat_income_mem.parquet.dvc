@@ -1,0 +1,5 @@
+outs:
+- md5: d48ca7902f887d79416929f1316ec8fe
+  size: 14835
+  hash: md5
+  path: feat_income_mem.parquet
