@@ -1,8 +1,6 @@
 # %% [md]
 # # Feature Engineering:
 # 1. Real Change in Monthly Household Employment Income (Including Employer CPF Contributions) Among Resident Employed Households at Selected Percentiles (Household Employment Income, Annual 2000-2024)
-# 2. Real Change in Monthly Household Employment Income Per Household Member (Including Employer CPF Contributions) Among Resident Employed Households at Selected Percentiles (Household Employment Income, Annual 2000-2024)
-# 3. Real Change in Average Monthly Household Employment Income (Including Employer CPF Contributions) Among Resident Employed Households by Type of Dwelling (Household Employment Income, Annual 2000-2024)
 
 # %% [md]
 # Read the base dataset
@@ -28,23 +26,19 @@ df = gpd.read_parquet(DATA_DIR / "base_dataset.parquet")
 df
 
 # %% [md]
-# Read the household income datasets
+# Read the household income dataset
 
 # %%
-HOUSEHOLD_INCOME = DATA_DIR / "Household_Income.csv"
-HOUSEHOLD_INCOME_PER_MEMBER = DATA_DIR / "Household_Income.csv"
-HOUSEHOLD_INCOME_PER_TYPE = DATA_DIR / "household_income_per_flat_type.csv"
+HOUSEHOLD_INCOME = DATA_DIR / "household_income.csv"
 HDB_IDX = DATA_DIR / "HDB_Resale_Price_Index.csv"
 PPI = DATA_DIR / "Private_Property_Index.csv"
 
 df_hi = pd.read_csv(HOUSEHOLD_INCOME)
-df_hi_mem = pd.read_csv(HOUSEHOLD_INCOME_PER_MEMBER)
-df_hi_type = pd.read_csv(HOUSEHOLD_INCOME_PER_TYPE)
 df_hdb = pd.read_csv(HDB_IDX)
 df_ppi = pd.read_csv(PPI)
 
 # %% [md]
-# # Household Income dataset
+# Household Income dataset
 
 # %%
 df_long = df_hi.melt(
