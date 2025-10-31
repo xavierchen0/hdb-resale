@@ -1,0 +1,5 @@
+outs:
+- md5: 5d33a54b3b735be0d7049eea71a74bcb
+  size: 3090
+  hash: md5
+  path: monthly_avg_sora_rates.csv
