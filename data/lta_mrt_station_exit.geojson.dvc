@@ -1,0 +1,5 @@
+outs:
+- md5: a56db02fd1bc0ce3d9681ca4f2d765e3
+  size: 319435
+  hash: md5
+  path: lta_mrt_station_exit.geojson
