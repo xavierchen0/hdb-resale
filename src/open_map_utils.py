@@ -62,7 +62,7 @@ def openmap_search(searchVal, returnGeom="Y", getAddrDetails="Y", pageNum=1):
     return response
 
 
-async def _fetch_one_addr(client, limiter, addr):
+async def _fetch_one_hdb_addr(client, limiter, addr):
     """
     Internal function used in async fetching.
     """
@@ -150,7 +150,7 @@ async def _fetch_one_addr(client, limiter, addr):
             }
 
 
-async def many_openmap_search(addresses):
+async def many_openmap_hdb_search(addresses):
     """
     Using async to deal with high network costs due to API calls to Open Map.
 
@@ -160,7 +160,7 @@ async def many_openmap_search(addresses):
     limiter = AsyncLimiter(max_rate=5000)  # Rate limit by OpenMap = 250 calls/min
 
     async with aiohttp.ClientSession(headers=headers) as client:
-        tasks = [_fetch_one_addr(client, limiter, addr) for addr in addresses]
+        tasks = [_fetch_one_hdb_addr(client, limiter, addr) for addr in addresses]
 
         results = await tqdm_asyncio.gather(
             *tasks, desc="OneMap Search API", total=len(tasks)
