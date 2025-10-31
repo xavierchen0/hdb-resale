@@ -167,3 +167,24 @@ async def many_openmap_hdb_search(addresses):
         )
 
     return pd.DataFrame(results)
+
+
+def nearest_mrt_search(latitude, longitude, radius_in_meters=2000):
+    """
+    https://www.onemap.gov.sg/apidocs/nearbytransport
+
+    Returns query results
+    """
+    url = "https://www.onemap.gov.sg/api/public/nearbysvc/getNearestMrtStops"
+
+    params = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "radius_in_meters": radius_in_meters,
+    }
+
+    headers = {"Authorization": ACCESS_TOKEN}
+
+    response = requests.get(url, params=params, headers=headers)
+
+    return response
