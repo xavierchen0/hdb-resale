@@ -163,7 +163,7 @@ async def many_openmap_hdb_search(addresses):
         tasks = [_fetch_one_hdb_addr(client, limiter, addr) for addr in addresses]
 
         results = await tqdm_asyncio.gather(
-            *tasks, desc="OneMap Search API", total=len(tasks)
+            *tasks, desc="OneMap Search API for HDB Locs", total=len(tasks)
         )
 
     return pd.DataFrame(results)
