@@ -1,0 +1,5 @@
+outs:
+- md5: 66b300d3e651ef165818993f7cb92f84
+  size: 4038
+  hash: md5
+  path: feat_sora_rates.parquet
