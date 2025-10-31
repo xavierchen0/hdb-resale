@@ -1,0 +1,5 @@
+outs:
+- md5: cf3bcdde6798b9d1a58c66fa1b37e915
+  size: 1605668
+  hash: md5
+  path: feat_loc_dist_cbd.parquet
