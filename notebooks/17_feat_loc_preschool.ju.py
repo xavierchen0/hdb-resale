@@ -1,8 +1,9 @@
 # %% [md]
-# # Feature Engineering: Distance to Sports
+# # Feature Engineering: Distance to pre-school
 
 # %% [md]
 # Read the base dataset
+
 # %%
 import collections
 from itertools import zip_longest
@@ -36,38 +37,42 @@ df_other_loc = df_other_loc.to_crs(epsg=3414)
 df_other_loc
 
 # %% [md]
-# Filter the facilities DataFrame to only include SPORTS
+# Filter the facilities DataFrame to only include preschool
 
 # %%
-df_sports = df_other_loc[df_other_loc["Theme"] == "SPORTS"].copy()
-df_sports
+df_preschool = df_other_loc[df_other_loc["Theme"] == "PRESCHOOL"].copy()
+df_preschool
 
 # %% [md]
-# Check themes dataset crs
+# check themes dataset crs
 
 # %%
-df_sports.crs
+df_preschool.crs
 
 # %% [md]
-# Join with the base dataset to get: distance to nearest sports
+# Join with the base dataset to get: distance to nearest hawker centre
 
 # %%
-hdb_nearest_sports = df.sjoin_nearest(
-    df_sports[["Name", "geometry"]],  # Select only necessary columns from the right df
+hdb_nearest_preschool = df.sjoin_nearest(
+    df_preschool[
+        ["Name", "geometry"]
+    ],  # Select only necessary columns from the right df
     how="left",
-    distance_col="distance_to_nearest_sports",  # Name the output distance column
+    distance_col="distance_to_nearest_preschool",  # Name the output distance column
 )
-hdb_nearest_sports
+hdb_nearest_preschool
+
 
 # %% [md]
-# Rename Name to nearest_sports
+# Rename Name to nearest_preschool
 
 # %%
-final_df = hdb_nearest_sports.rename(
+final_df = hdb_nearest_preschool.rename(
     columns={
-        "Name": "nearest_sports",
+        "Name": "nearest_preschool",
     }
 )
+
 final_df
 
 # %% [md]
@@ -78,7 +83,7 @@ final_df = final_df.drop(columns="index_right")
 final_df
 
 # %% [md]
-# add count of sports within 500m
+# add count of preschool within 500m
 
 # %%
 hdb_buffer_500 = final_df[["txn_id", "geometry"]].copy()
@@ -86,17 +91,19 @@ hdb_buffer_500["geometry"] = hdb_buffer_500.geometry.buffer(500)
 
 join_500 = gpd.sjoin(
     hdb_buffer_500,
-    df_sports[["Name", "geometry"]],
+    df_preschool[["Name", "geometry"]],
     how="left",
     predicate="contains",
 )
 
-# count hawkers per txn_id
-count_500 = join_500.groupby("txn_id").size().rename("num_sports_500m").reset_index()
+# count preschool per txn_id
+count_500 = (
+    join_500.groupby("txn_id").size().rename("num_preschools_500m").reset_index()
+)
 count_500
 
 # %% [md]
-# add count of sports within 1km
+# add count of preschool within 1km
 
 # %%
 hdb_buffer_1000 = final_df[["txn_id", "geometry"]].copy()
@@ -104,12 +111,14 @@ hdb_buffer_1000["geometry"] = hdb_buffer_1000.geometry.buffer(1000)
 
 join_1000 = gpd.sjoin(
     hdb_buffer_1000,
-    df_sports[["Name", "geometry"]],
+    df_preschool[["Name", "geometry"]],
     how="left",
     predicate="contains",
 )
 
-count_1000 = join_1000.groupby("txn_id").size().rename("num_sports_1000m").reset_index()
+count_1000 = (
+    join_1000.groupby("txn_id").size().rename("num_preschools_1000m").reset_index()
+)
 count_1000
 
 # %% [md]
@@ -122,11 +131,11 @@ final_df = final_df.merge(count_1000, on="txn_id", how="left")
 final_df
 
 # %% [md]
-# fill flats with no hawkers nearby as zero instead of NaN
+# fill flats with no preschools nearby as zero instead of NaN
 
 # %%
-final_df[["num_sports_500m", "num_sports_1000m"]] = (
-    final_df[["num_sports_500m", "num_sports_1000m"]].fillna(0).astype(int)
+final_df[["num_preschools_500m", "num_preschools_1000m"]] = (
+    final_df[["num_preschools_500m", "num_preschools_1000m"]].fillna(0).astype(int)
 )
 final_df
 
@@ -154,11 +163,11 @@ final_df
 # while a smaller $ \lambda $ means only nearby hawkers contribute significantly.
 
 # %%
-sports_points = df_sports.geometry.to_list()
-sports_array = np.array([(p.x, p.y) for p in sports_points])
+preschool_points = df_preschool.geometry.to_list()
+preschool_array = np.array([(p.x, p.y) for p in preschool_points])
 
-final_df["sports_access"] = final_df.geometry.apply(
-    lambda geom: utils.accessibility_score_one_point(geom, sports_array, lam=500)
+final_df["preschool_access"] = final_df.geometry.apply(
+    lambda geom: utils.accessibility_score_one_point(geom, preschool_array, lam=500)
 )
 final_df
 
@@ -170,10 +179,10 @@ df_merged = final_df.loc[
     :,
     [
         "txn_id",
-        "distance_to_nearest_sports",
-        "num_sports_500m",
-        "num_sports_1000m",
-        "sports_access",
+        "distance_to_nearest_preschool",
+        "num_preschools_500m",
+        "num_preschools_1000m",
+        "preschool_access",
     ],
 ]
 df_merged
@@ -200,4 +209,4 @@ df_merged
 # # Export
 
 # %%
-df_merged.to_parquet(DATA_DIR / "feat" / "feat_loc_sports.parquet")
+df_merged.to_parquet(DATA_DIR / "feat" / "feat_loc_preschool.parquet")
