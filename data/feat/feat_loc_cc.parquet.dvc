@@ -1,0 +1,5 @@
+outs:
+- md5: b8a9816c71ccd06aeec405fc7bb5a168
+  size: 2257062
+  hash: md5
+  path: feat_loc_cc.parquet

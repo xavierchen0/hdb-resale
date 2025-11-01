@@ -72,9 +72,8 @@ df_nparks.head()
 print("--- Step 3: Convert X/Y to Geometry (GeoDataFrame) ---")
 
 # 1. Ensure X and Y coordinates are numeric
-# We use errors='coerce' to turn any non-numeric values (like NaNs) into NaN
-df_nparks['X'] = pd.to_numeric(df_nparks['X'], errors='coerce')
-df_nparks['Y'] = pd.to_numeric(df_nparks['Y'], errors='coerce')
+df_nparks['X'] = pd.to_numeric(df_nparks['X'])
+df_nparks['Y'] = pd.to_numeric(df_nparks['Y'])
 
 # Drop any rows where X or Y could not be read or were invalid
 df_nparks.dropna(subset=['X', 'Y'], inplace=True)
