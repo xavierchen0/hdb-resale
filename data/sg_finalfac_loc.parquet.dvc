@@ -1,0 +1,5 @@
+outs:
+- md5: ae9e1d5820772754031486f15de76f32
+  size: 210608
+  hash: md5
+  path: sg_finalfac_loc.parquet

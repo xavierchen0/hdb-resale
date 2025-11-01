@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 # Allow importing from src/
@@ -68,3 +69,13 @@ def get_geo_data_for_each_row(row):
 def chunked(lst, size):
     for i in range(0, len(lst), size):
         yield i // size, lst[i : i + size]  # (batch_index, slice)
+
+
+def accessibility_score_one_point(pt, hawker_coords, lam=500):
+    # pt is shapely Point in EPSG:3414 (meters)
+    # hawker_coords is array shape (N,2) of x,y
+    x0, y0 = pt.x, pt.y
+    dx = hawker_coords[:, 0] - x0
+    dy = hawker_coords[:, 1] - y0
+    dists = np.sqrt(dx * dx + dy * dy)  # Euclidean distance in meters
+    return np.exp(-dists / lam).sum()
