@@ -1,0 +1,5 @@
+outs:
+- md5: f1172436d301512bbe90bc6966675e08
+  size: 3263565
+  hash: md5
+  path: feat_loc_preschool.parquet
