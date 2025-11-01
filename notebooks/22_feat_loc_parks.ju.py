@@ -24,7 +24,7 @@ import geopandas as gpd
 from shapely.geometry import Point
 from pathlib import Path
 import sys
-import pandas as np
+import numpy as np
 
 # %%
 dataset_id = "d_0542d48f0991541706b58059381a6eca"
@@ -185,10 +185,44 @@ final_df = final_df.merge(count_1000, on="txn_id", how="left")
 final_df
 
 # %%
-mixedschool_points = gdf_nparks_loc.geometry.to_list()
-mixedschool_array = np.array([(p.x, p.y) for p in mixedschool_points])
+park_points = gdf_nparks.geometry.to_list()
+
+# --- Find the correct list of coordinates ---
+park_coords_list = []
+for p in park_points:
+    # Safely check if the point is valid before extracting coordinates
+    if p is not None and p.is_valid:
+        park_coords_list.append((p.x, p.y))
+
+# This guarantees the required 2D structure (N rows, 2 columns).
+park_array = np.array(park_coords_list, dtype=np.float64)
 
 final_df["parks_access"] = final_df.geometry.apply(
-    lambda geom: accessibility_score_one_point(geom, mixedschool_array, lam=500)
+    lambda geom: accessibility_score_one_point(geom, park_array, lam=500)
 )
 final_df
+
+# %%
+df_merged = final_df.loc[
+    :,
+    [
+        "txn_id",
+        "distance_to_nearest_park",
+        "num_parks_500m",
+        "num_parks_1000m",
+        "parks_access",
+    ],
+]
+df_merged
+
+# %%
+df_merged[df_merged.isna().any(axis=1)]
+
+# %%
+df_merged.dtypes
+
+# %%
+df_merged
+
+# %%
+df_merged.to_parquet(DATA_DIR / "feat" / "feat_loc_parks.parquet")
