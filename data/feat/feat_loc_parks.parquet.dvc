@@ -1,0 +1,5 @@
+outs:
+- md5: 24ae24e8ddc58c6c0f5766e9cf9d671c
+  size: 2262038
+  hash: md5
+  path: feat_loc_parks.parquet
