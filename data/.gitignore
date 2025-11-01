@@ -25,3 +25,7 @@
 /base_dataset2.parquet
 /sg_fac_loc.parquet
 /sg_finalfac_loc.parquet
+/loc_pri_sch.parquet
+/loc_sec_sch.parquet
+/loc_jc_sch.parquet
+/loc_others_sch.parquet
