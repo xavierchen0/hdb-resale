@@ -1,0 +1,5 @@
+outs:
+- md5: 899f48841bcb9add29d6cb8e70e2d0d7
+  size: 14381
+  hash: md5
+  path: loc_jc_sch.parquet
