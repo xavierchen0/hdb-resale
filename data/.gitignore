@@ -23,3 +23,5 @@
 /feat_coe.parquet
 /feat_data.pkl
 /base_dataset2.parquet
+/sg_fac_loc.parquet
+/sg_finalfac_loc.parquet
