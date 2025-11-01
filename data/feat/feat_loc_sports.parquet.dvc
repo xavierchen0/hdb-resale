@@ -1,0 +1,5 @@
+outs:
+- md5: 632dc2051c7635a3f6bcb84065e64777
+  size: 2752664
+  hash: md5
+  path: feat_loc_sports.parquet
