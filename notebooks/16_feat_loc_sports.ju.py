@@ -92,7 +92,9 @@ join_500 = gpd.sjoin(
 )
 
 # count hawkers per txn_id
-count_500 = join_500.groupby("txn_id").size().rename("num_sports_500m").reset_index()
+count_500 = (
+    join_500.groupby("txn_id")["Name"].count().rename("num_sports_500m").reset_index()
+)
 count_500
 
 # %% [md]
@@ -109,7 +111,9 @@ join_1000 = gpd.sjoin(
     predicate="contains",
 )
 
-count_1000 = join_1000.groupby("txn_id").size().rename("num_sports_1000m").reset_index()
+count_1000 = (
+    join_1000.groupby("txn_id")["Name"].count().rename("num_sports_1000m").reset_index()
+)
 count_1000
 
 # %% [md]
