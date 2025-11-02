@@ -90,7 +90,10 @@ join_500 = gpd.sjoin(
 
 # count prischool per txn_id
 count_500 = (
-    join_500.groupby("txn_id").size().rename("num_prischools_500m").reset_index()
+    join_500.groupby("txn_id")["school_name"]
+    .count()
+    .rename("num_prischools_500m")
+    .reset_index()
 )
 count_500
 
@@ -109,7 +112,10 @@ join_1000 = gpd.sjoin(
 )
 
 count_1000 = (
-    join_1000.groupby("txn_id").size().rename("num_prischools_1000m").reset_index()
+    join_1000.groupby("txn_id")["school_name"]
+    .count()
+    .rename("num_prischools_1000m")
+    .reset_index()
 )
 count_1000
 
