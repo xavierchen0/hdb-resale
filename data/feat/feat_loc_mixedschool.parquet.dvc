@@ -1,0 +1,5 @@
+outs:
+- md5: d5110466a9724b8bdf72dc39a048ca19
+  size: 2097851
+  hash: md5
+  path: feat_loc_mixedschool.parquet
