@@ -1,0 +1,5 @@
+outs:
+- md5: 0472d6f12a2919a208aa2d069fd9bd3f
+  size: 32829
+  hash: md5
+  path: loc_nparks.parquet
