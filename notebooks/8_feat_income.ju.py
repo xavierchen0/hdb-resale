@@ -74,6 +74,23 @@ new_rows = pd.DataFrame([{"year": pd.to_datetime("2025-12-31"), "inc_pct_change"
 df_long_median = pd.concat([df_long_median, new_rows])
 df_long_median
 
+# %% [markdown]
+# $$M = \left( (1 + A)^{\frac{1}{12}} - 1 \right) \times 100$$
+
+# %%
+# Calculate the Annual Factor (Factor = 1 + Annual Change / 100)
+df_long_median["annual_factor"] = 1 + (df_long_median["inc_pct_change"] / 100)
+
+# Calculate the Monthly Factor (12th root of the Annual Factor)
+df_long_median["monthly_factor"] = df_long_median["annual_factor"] ** (1 / 12)
+
+# Calculate the Monthly Percentage Change and OVERWRITE the original 'inc_pct_change' column
+# Note: The original 'inc_pct_change' column will be overwritten with monthly values.
+df_long_median["inc_pct_change"] = (df_long_median["monthly_factor"] - 1) * 100
+
+df_long_median.drop(columns=["annual_factor", "monthly_factor"], inplace=True)
+df_long_median
+
 # %% [md]
 # Convert to months
 # <br>
