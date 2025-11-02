@@ -1,0 +1,5 @@
+outs:
+- md5: b1cc946b97350e2a14827754739ba07b
+  size: 25711
+  hash: md5
+  path: loc_food_centre.parquet
