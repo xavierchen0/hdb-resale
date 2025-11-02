@@ -22,4 +22,5 @@
 /loc_sec_sch.parquet
 /loc_jc_sch.parquet
 /loc_mixed_sch.parquet
+/cc_dataset.parquet
 /loc_nparks.parquet
