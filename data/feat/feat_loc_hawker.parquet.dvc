@@ -1,5 +1,5 @@
 outs:
-- md5: 24379b29aaeef82fad78adf32f995371
-  size: 2752664
+- md5: 0f9ba45669864757e5a73325011155af
+  size: 2222411
   hash: md5
   path: feat_loc_hawker.parquet
