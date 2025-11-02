@@ -1,5 +1,5 @@
 outs:
-- md5: c55c0b8b20e14093047300d4d198e792
+- md5: f80b9902588b301ed27e405a64f444f0
   size: 2097747
   hash: md5
   path: feat_loc_jcschool.parquet

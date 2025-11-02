@@ -1,5 +1,5 @@
 outs:
-- md5: d40ee7f65947fc162350ae52a2174f6a
+- md5: aad2d96328d3733fc6394eef638ab8f2
   size: 2226881
   hash: md5
   path: feat_loc_secschool.parquet
