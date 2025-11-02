@@ -1,0 +1,5 @@
+outs:
+- md5: dd205e37be2f9ee40ecf991aab2f0912
+  size: 2254231
+  hash: md5
+  path: feat_loc_prischool.parquet
