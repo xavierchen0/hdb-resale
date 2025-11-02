@@ -1,0 +1,5 @@
+outs:
+- md5: dab3bec41df40e58852d606256f37344
+  size: 2258976
+  hash: md5
+  path: feat_loc_mall.parquet

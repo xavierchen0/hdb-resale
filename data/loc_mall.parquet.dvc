@@ -1,0 +1,5 @@
+outs:
+- md5: b566a585e2a228630700555e6fcd4ec5
+  size: 52587
+  hash: md5
+  path: loc_mall.parquet

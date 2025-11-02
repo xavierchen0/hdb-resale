@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import requests
 
 # Allow importing from src/
 ROOT_DIR = Path().parent.resolve()
@@ -79,3 +80,25 @@ def accessibility_score_one_point(pt, hawker_coords, lam=500):
     dy = hawker_coords[:, 1] - y0
     dists = np.sqrt(dx * dx + dy * dy)  # Euclidean distance in meters
     return np.exp(-dists / lam).sum()
+
+
+OVERPASS_ENDPOINTS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.openstreetmap.fr/api/interpreter",
+]
+
+
+def fetch_overpass(query: str) -> dict:
+    last_err = None
+    for url in OVERPASS_ENDPOINTS:
+        try:
+            r = requests.post(url, data={"data": query}, timeout=120)
+            if r.status_code != 200:
+                print(f"[warn] {url} → {r.status_code}\n{r.text[:500]}")
+                r.raise_for_status()
+            return r.json()
+        except requests.RequestException as e:
+            last_err = e
+            continue
+    raise last_err
