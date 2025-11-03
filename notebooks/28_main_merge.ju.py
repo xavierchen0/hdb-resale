@@ -248,5 +248,45 @@ print(f"✅ Successfully merged COE features based on 'month'.")
 print(f"Final column count: {len(gdf_merged.columns)}")
 gdf_merged.head()
 
+# %% [md]
+# Convert `storey_range` to the median of the lower and upper limit
+# %%
+gdf_merged["storey_median"] = (
+    gdf_merged["storey_range"]
+    .str.extractall(r"(\d+)")[0]
+    .groupby(level=0)
+    .apply(lambda x: x.astype(int).median())
+)
+gdf_merged[["storey_range", "storey_median"]]
+
+# %% [md]
+# Drop a few unnecessary cols
+# %%
+gdf_merged = gdf_merged.drop(
+    columns=[
+        "block",
+        "street_name",
+        "flat_model",
+        "lease_commence_date",
+        "full_addr",
+        "postal_code",
+        "x",
+        "y",
+        "latitude",
+        "longitude",
+        "region",
+        "__batch__",
+        "town",
+        "storey_range",
+    ]
+)
+
+# %% [md]
+# final set of cols
+
+# %%
+pd.set_option("display.max_rows", None)
+pd.DataFrame(gdf_merged.dtypes)
+
 # %%
 gdf_merged.to_parquet(DATA_DIR / "final_dataset.parquet")
