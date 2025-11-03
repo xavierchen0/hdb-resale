@@ -2,10 +2,10 @@
 # # MGWR Modelling Across Years (2017–2025)
 #
 # This notebook-style script prepares yearly slices of the feature-enriched HDB resale dataset,
-# prunes collinear predictors via correlation filtering and VIF, scales the design matrix, and fits
-# Multiscale Geographically Weighted Regression (MGWR) models for each calendar year from 2017
-# through 2025. Local parameter estimates and diagnostics are persisted for downstream spatial
-# analysis.
+# retains must-have predictors, prunes the remainder via correlation filtering and VIF, scales the
+# design matrix, and fits Multiscale Geographically Weighted Regression (MGWR) models for each
+# calendar year from 2017 through 2025. Local parameter estimates and diagnostics are persisted for
+# downstream spatial analysis.
 
 # %% [md]
 # ## Quick sanity test (optional)
@@ -15,15 +15,16 @@
 # ```python
 # TEST_MODE = True
 # TEST_YEAR = 2023
-# TEST_FEATURE_LIMIT = 5
 # YEARS = [TEST_YEAR]
 # ```
 
 # %% [md]
 # ## 1. Imports and configuration
 # - `YEARS`: modelling horizon.
-# - `FEATURE_LIMIT_BEFORE_VIF`: number of top correlated features to retain before VIF screening.
-# - `VIF_THRESHOLD`: maximum acceptable VIF before dropping a feature.
+# - `MUST_HAVE_FEATURES`: columns that must always be included.
+# - `ADDITIONAL_FEATURE_LIMIT`: number of extra correlated features to keep (after filtering out
+#   the must-have list and checking VIF).
+# - `VIF_THRESHOLD`: maximum acceptable VIF before dropping an additional feature.
 # - `MAX_SAMPLE`: optional cap on rows per year (set to `None` to keep all observations).
 # - `OUTPUT_DIR`: where parquet/CSV outputs are written.
 
@@ -44,25 +45,35 @@ from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from tqdm.auto import tqdm
 
-import warnings
-
-# Ignore all warnings
-warnings.filterwarnings("ignore")
-
 project_root = Path().resolve().parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from src.config import DATA_DIR  # noqa: E402
 
-YEARS: Sequence[int] = tuple(range(2024, 2019, -1))
-FEATURE_LIMIT_BEFORE_VIF: int | None = 40
+YEARS: Sequence[int] = tuple(range(2024, 2025))
+MUST_HAVE_FEATURES: Sequence[str] = (
+    "floor_area_sqm",
+    "remaining_lease",
+    "storey_median",
+    "flat_type_2 ROOM",
+    "flat_type_3 ROOM",
+    "flat_type_4 ROOM",
+    "flat_type_5 ROOM",
+    "flat_type_EXECUTIVE",
+    "flat_type_MULTI-GENERATION",
+    "distance_to_nearest_preschool",
+    "distance_to_nearest_mrt_lrt",
+    "distance_to_nearest_mall",
+    "distance_to_nearest_prischool",
+    "dist_to_cbd",
+)
+ADDITIONAL_FEATURE_LIMIT: int = 10
 VIF_THRESHOLD: float = 10.0
 MAX_SAMPLE: int | None = None
-MIN_FEATURES: int = 2
+MIN_FEATURES: int = len(MUST_HAVE_FEATURES) + 1
 TEST_MODE: bool = False
 TEST_YEAR: int = 2023
-TEST_FEATURE_LIMIT: int = 5
 
 if TEST_MODE:
     YEARS = [TEST_YEAR]
@@ -74,19 +85,19 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # ## 2. Helper utilities
 #
 # - `clean_feature_frame`: keeps numeric predictors, drops constants, handles infs/NaNs.
-# - `select_features_with_vif`: iteratively removes features above the VIF threshold.
-# - `prepare_design_matrices`: correlation-filter → scale → VIF prune → return matrices + metadata.
+# - `select_features_with_vif`: iteratively removes features above the VIF threshold (must-have
+#   features are exempt).
+# - `prepare_design_matrices`: gather must-have columns, add correlated extras, scale & VIF prune.
 
 
 # %%
 @dataclass
 class VIFResult:
-    selected_idx: List[int]
     kept_features: List[str]
     vif_series: pd.Series
     dropped: List[Dict[str, object]]
     numeric_count: int
-    pre_vif_count: int
+    candidate_count: int
 
 
 def clean_feature_frame(df: pd.DataFrame, drop_cols: Iterable[str]) -> pd.DataFrame:
@@ -94,39 +105,30 @@ def clean_feature_frame(df: pd.DataFrame, drop_cols: Iterable[str]) -> pd.DataFr
     feat_df = feat_df.select_dtypes(include=[np.number]).copy()
     feat_df.replace([np.inf, -np.inf], np.nan, inplace=True)
     feat_df.dropna(axis=1, inplace=True)
-
     nunique = feat_df.nunique(dropna=True)
-    non_constant_cols = nunique[nunique > 1].index
-    feat_df = feat_df[non_constant_cols]
-
+    feat_df = feat_df[nunique[nunique > 1].index]
     return feat_df.astype(float)
 
 
 def select_features_with_vif(
     X_scaled: np.ndarray,
     feature_names: List[str],
+    must_have_set: set[str],
     threshold: float,
     numeric_count: int,
 ) -> VIFResult:
     remaining = list(range(X_scaled.shape[1]))
     dropped: List[Dict[str, object]] = []
-    pre_vif_count = len(feature_names)
+    candidate_count = len(feature_names)
 
     while remaining:
         X_curr = X_scaled[:, remaining]
-        if X_curr.shape[1] <= 1:
-            vif_vals = pd.Series(
-                [np.nan] if X_curr.shape[1] == 1 else [],
-                index=[feature_names[remaining[0]]] if X_curr.shape[1] == 1 else [],
-                dtype=float,
-            )
+        curr_features = [feature_names[i] for i in remaining]
+
+        if len(curr_features) <= len(must_have_set):
+            vif_vals = pd.Series(np.nan, index=curr_features, dtype=float)
             return VIFResult(
-                remaining.copy(),
-                [feature_names[i] for i in remaining],
-                vif_vals,
-                dropped,
-                numeric_count,
-                pre_vif_count,
+                curr_features, vif_vals, dropped, numeric_count, candidate_count
             )
 
         try:
@@ -145,39 +147,44 @@ def select_features_with_vif(
                 drop_idx_local = (
                     j if np.sum(np.abs(corr[j])) >= np.sum(np.abs(corr[i])) else i
                 )
-            drop_global_idx = remaining.pop(drop_idx_local)
+            drop_global_idx = remaining[drop_idx_local]
+            candidate = feature_names[drop_global_idx]
+            if candidate in must_have_set:
+                dropped.append(
+                    {
+                        "feature": candidate,
+                        "vif": float("inf"),
+                        "reason": "singular_must_keep",
+                    }
+                )
+                remaining.pop(drop_idx_local)
+                remaining.insert(0, drop_global_idx)
+                continue
             dropped.append(
-                {
-                    "feature": feature_names[drop_global_idx],
-                    "vif": float("inf"),
-                    "reason": "singular",
-                }
+                {"feature": candidate, "vif": float("inf"), "reason": "singular"}
             )
+            remaining.pop(drop_idx_local)
             continue
 
-        max_vif = float(np.max(vif_array))
-        if max_vif <= threshold:
-            vif_series = pd.Series(
-                vif_array, index=[feature_names[i] for i in remaining]
-            )
-            return VIFResult(
-                remaining.copy(),
-                [feature_names[i] for i in remaining],
-                vif_series,
-                dropped,
-                numeric_count,
-                pre_vif_count,
-            )
+        max_vif_idx = int(np.argmax(vif_array))
+        max_vif = float(vif_array[max_vif_idx])
+        candidate = curr_features[max_vif_idx]
 
-        drop_idx_local = int(np.argmax(vif_array))
-        drop_global_idx = remaining.pop(drop_idx_local)
+        if candidate in must_have_set or max_vif <= threshold:
+            if max_vif <= threshold:
+                vif_series = pd.Series(vif_array, index=curr_features)
+                return VIFResult(
+                    curr_features, vif_series, dropped, numeric_count, candidate_count
+                )
+            else:
+                remaining.pop(max_vif_idx)
+                remaining.insert(0, remaining.pop(0) if remaining else 0)
+                continue
+
         dropped.append(
-            {
-                "feature": feature_names[drop_global_idx],
-                "vif": max_vif,
-                "reason": "above_threshold",
-            }
+            {"feature": candidate, "vif": max_vif, "reason": "above_threshold"}
         )
+        remaining.pop(max_vif_idx)
 
     raise ValueError("All features were removed during VIF selection.")
 
@@ -186,55 +193,50 @@ def prepare_design_matrices(
     gdf_year: gpd.GeoDataFrame,
     drop_cols: Iterable[str],
     target: pd.Series,
+    must_have: Sequence[str],
+    extra_limit: int,
     vif_threshold: float,
-    feature_limit: int | None,
 ) -> Tuple[np.ndarray, List[str], StandardScaler, VIFResult]:
     numeric_df = clean_feature_frame(gdf_year, drop_cols)
     if numeric_df.empty:
         raise ValueError("No numeric features available after cleaning.")
 
+    must_have_set = {col for col in must_have if col in numeric_df.columns}
+    missing_must_have = set(must_have) - must_have_set
+    if missing_must_have:
+        raise KeyError(f"Missing must-have features: {sorted(missing_must_have)}")
+
+    extra_candidates = numeric_df.drop(columns=list(must_have_set), errors="ignore")
     numeric_count = numeric_df.shape[1]
 
-    corr_scores = numeric_df.apply(lambda col: col.corr(target, method="spearman"))
+    corr_scores = extra_candidates.apply(
+        lambda col: col.corr(target, method="spearman")
+    )
     corr_scores = corr_scores.abs().dropna().sort_values(ascending=False)
-    if corr_scores.empty:
-        raise ValueError("All features were dropped during correlation screening.")
+    extra_cols = corr_scores.index.tolist()[:extra_limit]
 
-    ordered_cols = corr_scores.index.tolist()
-    if feature_limit is not None and len(ordered_cols) > feature_limit:
-        ordered_cols = ordered_cols[:feature_limit]
-
-    candidate_df = numeric_df[ordered_cols]
-
-    if TEST_MODE:
-        candidate_df = candidate_df.iloc[:, :TEST_FEATURE_LIMIT]
-        ordered_cols = candidate_df.columns.tolist()
-
-    if candidate_df.shape[1] < MIN_FEATURES:
-        raise ValueError(
-            f"Insufficient features after correlation filtering (found {candidate_df.shape[1]})."
-        )
+    feature_df = numeric_df[list(must_have_set) + extra_cols]
 
     scaler = StandardScaler()
-    X_scaled_all = scaler.fit_transform(candidate_df.to_numpy())
-    feature_names = list(candidate_df.columns)
+    X_scaled_all = scaler.fit_transform(feature_df.to_numpy())
+    feature_names = list(feature_df.columns)
 
     vif_result = select_features_with_vif(
-        X_scaled_all, feature_names, vif_threshold, numeric_count
+        X_scaled_all,
+        feature_names,
+        must_have_set,
+        vif_threshold,
+        numeric_count,
     )
 
-    selected_matrix = X_scaled_all[:, vif_result.selected_idx]
-    selected_features = [feature_names[i] for i in vif_result.selected_idx]
+    selected_features = vif_result.kept_features
+    selected_indices = [feature_names.index(col) for col in selected_features]
+    X_selected = X_scaled_all[:, selected_indices]
 
-    if selected_matrix.shape[1] < MIN_FEATURES:
-        raise ValueError(
-            f"Insufficient features after VIF filtering (found {selected_matrix.shape[1]})."
-        )
+    scaler.mean_ = scaler.mean_[selected_indices]
+    scaler.scale_ = scaler.scale_[selected_indices]
 
-    scaler.mean_ = scaler.mean_[vif_result.selected_idx]
-    scaler.scale_ = scaler.scale_[vif_result.selected_idx]
-
-    return selected_matrix, selected_features, scaler, vif_result
+    return X_selected, selected_features, scaler, vif_result
 
 
 # %% [md]
@@ -277,17 +279,21 @@ for year in tqdm(YEARS, desc="MGWR years"):
             gdf_year,
             DROP_COLUMNS,
             target_log,
+            MUST_HAVE_FEATURES,
+            ADDITIONAL_FEATURE_LIMIT,
             VIF_THRESHOLD,
-            FEATURE_LIMIT_BEFORE_VIF,
         )
     except ValueError as err:
+        tqdm.write(f"[skip] {year}: {err}")
+        continue
+    except KeyError as err:
         tqdm.write(f"[skip] {year}: {err}")
         continue
 
     tqdm.write(
         f"[year {year}] obs={len(gdf_year):,}, numeric={vif_info.numeric_count}, "
-        f"candidates={vif_info.pre_vif_count}, kept={len(selected_features)}, "
-        f"dropped_vif={len(vif_info.dropped)}"
+        f"candidates={vif_info.candidate_count}, kept={len(selected_features)}, "
+        f"must-have retained={len(set(MUST_HAVE_FEATURES) & set(selected_features))}"
     )
 
     coords = np.column_stack([gdf_year.geometry.x, gdf_year.geometry.y])
@@ -338,9 +344,8 @@ for year in tqdm(YEARS, desc="MGWR years"):
             "year": year,
             "observations": len(gdf_year),
             "features_numeric": vif_info.numeric_count,
-            "features_candidates": vif_info.pre_vif_count,
+            "features_candidates": vif_info.candidate_count,
             "features_retained": len(selected_features),
-            "features_dropped_vif": len(vif_info.dropped),
             "bandwidth_min": float(np.min(bandwidths)),
             "bandwidth_max": float(np.max(bandwidths)),
             "aicc": float(mgwr_results.aicc),
