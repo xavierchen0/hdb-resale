@@ -4,10 +4,11 @@
 # %%
 import pandas as pd
 import glob
-import numpy as np
 import geopandas as gpd
 from pathlib import Path
 import sys
+import gc
+import pyarrow.parquet as pq
 from tqdm.auto import tqdm
 
 # %% [md]
@@ -66,75 +67,99 @@ if not gdf_merged.empty:
     for file_path in tqdm(feature_files, desc="Merging Features"):
         file_name = Path(file_path).name
         df_feature = None
+        temp_merged = None
 
         try:
-            # --- Load Data with Fallback ---
-            try:
-                df_feature = gpd.read_parquet(file_path)
-                df_feature = df_feature.to_crs(TARGET_CRS)
-            except Exception:
-                df_feature = pd.read_parquet(file_path)
+            parquet_file = pq.ParquetFile(file_path)
+            feature_columns = parquet_file.schema.names
+        except Exception as meta_err:
+            tqdm.write(f"Skipped {file_name}: Unable to read metadata ({meta_err}).")
+            continue
 
-            if df_feature is None:
-                continue
+        has_first_key = FIRST_KEY in feature_columns
+        has_second_key = SECOND_KEY in feature_columns
 
-            # --- DETERMINE MERGE STRATEGY ---
+        if not has_first_key and not has_second_key:
+            tqdm.write(
+                f"Skipped {file_name}: Missing both merge keys ('{FIRST_KEY}' and '{SECOND_KEY}')."
+            )
+            continue
 
-            # Case 1: Has MONTH (Time-series features). Requires two-stage logic.
-            if FIRST_KEY in df_feature.columns:
-                # --- STAGE 1 MERGE: By 'month' ---
+        current_cols = set(gdf_merged.columns)
+        value_columns = [
+            col for col in feature_columns if col not in {FIRST_KEY, SECOND_KEY}
+        ]
+        new_value_columns = [col for col in value_columns if col not in current_cols]
+
+        columns_to_read = []
+        if has_first_key:
+            columns_to_read.append(FIRST_KEY)
+        if has_second_key and SECOND_KEY not in columns_to_read:
+            columns_to_read.append(SECOND_KEY)
+        columns_to_read.extend(new_value_columns)
+
+        if not new_value_columns:
+            tqdm.write(f"Skipped {file_name}: No new columns to merge.")
+            continue
+
+        try:
+            if "geometry" in columns_to_read:
+                df_feature = gpd.read_parquet(file_path, columns=columns_to_read)
+                if getattr(df_feature, "crs", None) and df_feature.crs != TARGET_CRS:
+                    df_feature = df_feature.to_crs(TARGET_CRS)
+            else:
+                df_feature = pd.read_parquet(file_path, columns=columns_to_read)
+        except Exception as read_err:
+            tqdm.write(f"Error loading {file_name}: {read_err}. Skipping.")
+            continue
+
+        try:
+            if has_first_key and has_second_key:
+                df_txn = df_feature.drop_duplicates(subset=[SECOND_KEY])
                 temp_merged = gdf_merged.merge(
+                    right=df_txn,
+                    on=SECOND_KEY,
+                    how="left",
+                    suffixes=("", "_feat_txn"),
+                    copy=False,
+                )
+
+                unmatched_mask = temp_merged[new_value_columns].isna().all(axis=1)
+                if unmatched_mask.any():
+                    month_lookup = (
+                        df_feature[[FIRST_KEY] + new_value_columns]
+                        .drop_duplicates(subset=[FIRST_KEY])
+                        .set_index(FIRST_KEY)
+                    )
+                    month_values = month_lookup.reindex(
+                        temp_merged.loc[unmatched_mask, FIRST_KEY]
+                    )
+                    for col in new_value_columns:
+                        temp_merged.loc[unmatched_mask, col] = month_values[
+                            col
+                        ].to_numpy()
+
+                gdf_merged = temp_merged
+
+            elif has_first_key:
+                df_feature = df_feature.drop_duplicates(subset=[FIRST_KEY])
+                gdf_merged = gdf_merged.merge(
                     right=df_feature,
                     on=FIRST_KEY,
                     how="left",
                     suffixes=("", "_feat"),
-                    indicator=True,
+                    copy=False,
                 )
 
-                # Identify rows that were NOT merged successfully by month
-                # and have the SECOND_KEY for a second attempt
-                if SECOND_KEY in df_feature.columns:
-                    # Rows in main data that failed to match on month
-                    gdf_unmatched_mask = temp_merged["_merge"] == "left_only"
-                    gdf_unmatched = gdf_merged[gdf_unmatched_mask].copy()
-
-                    # Rows that were matched in Stage 1
-                    gdf_matched = temp_merged[
-                        temp_merged["_merge"] != "left_only"
-                    ].drop(columns=["_merge"])
-
-                    # --- STAGE 2 MERGE: By 'txn_id' on UNMATCHED rows ---
-                    gdf_unmatched_merged = gdf_unmatched.merge(
-                        right=df_feature,
-                        on=SECOND_KEY,
-                        how="left",
-                        suffixes=("", "_feat_txn"),
-                    )
-
-                    # Final combine: Matched + Second-stage Merged
-                    gdf_merged = pd.concat(
-                        [gdf_matched, gdf_unmatched_merged]
-                    ).drop_duplicates(subset=[SECOND_KEY, FIRST_KEY])
-
-                else:
-                    # If SECOND_KEY is missing, just use the month merge result
-                    gdf_merged = temp_merged.drop(columns=["_merge"])
-
-            # Case 2: Missing MONTH, but has TXN_ID (Location features)
-            elif SECOND_KEY in df_feature.columns:
-                # Direct merge by txn_id
+            else:
+                df_feature = df_feature.drop_duplicates(subset=[SECOND_KEY])
                 gdf_merged = gdf_merged.merge(
                     right=df_feature,
                     on=SECOND_KEY,
                     how="left",
                     suffixes=("", "_feat_txn"),
+                    copy=False,
                 )
-
-            else:
-                tqdm.write(
-                    f"Skipped {file_name}: Missing both merge keys ('{FIRST_KEY}' and '{SECOND_KEY}')."
-                )
-                continue
 
             tqdm.write(f"➡️ Merged feature: {file_name}")
 
@@ -142,10 +167,16 @@ if not gdf_merged.empty:
             tqdm.write(
                 f"General Error during merge of {file_name}: **MemoryError**. Skipping to prevent crash."
             )
-            continue  # Skip to the next file
-
-        except Exception as e:
-            tqdm.write(f"General Error during merge of {file_name}: {e}. Skipping.")
+            continue
+        except Exception as merge_err:
+            tqdm.write(
+                f"General Error during merge of {file_name}: {merge_err}. Skipping."
+            )
+            continue
+        finally:
+            df_feature = None
+            temp_merged = None
+            gc.collect()
 
         # Clean up any duplicate columns that may have resulted from the merge attempts
         cols_to_drop = [
@@ -182,15 +213,9 @@ for file_path in tqdm(feature_files, desc="Counting Expected Columns"):
     file_name = Path(file_path).name
 
     try:
-        # Load as Pandas DataFrame for fast metadata check
-        df_feature = pd.read_parquet(file_path)
-
-        # Identify columns that are NOT the merge keys ('month', 'txn_id')
-        new_cols = set(df_feature.columns) - {FIRST_KEY, SECOND_KEY}
-
-        # Add new unique columns to the expected set
-        expected_new_cols.update(new_cols)
-
+        parquet_file = pq.ParquetFile(file_path)
+        feature_cols = set(parquet_file.schema.names)
+        expected_new_cols.update(feature_cols - {FIRST_KEY, SECOND_KEY})
     except Exception as e:
         tqdm.write(f"Error counting columns in {file_name}: {e}. Skipping.")
 
@@ -226,27 +251,6 @@ pd.set_option("display.width", 1000)
 
 print("Displaying the first 10 rows of the merged GeoDataFrame:")
 gdf_merged
-
-# %%
-df1 = pd.read_parquet(FEAT_DIR / "feat_coe.parquet")
-df1
-
-# %%
-# Assuming df1 has columns: month, coe_a, coe_b, coe_c, coe_d, coe_e
-# 1. Identify the columns to aggregate (all non-month columns)
-coe_cols = [col for col in df1.columns if col != "month"]
-
-# 2. Aggregate df1 to one row per month
-# We use .mean() to collapse the transaction-level data into monthly averages.
-df_coe_agg = df1.groupby("month", as_index=False)[coe_cols].mean()
-
-print(f"Aggregated COE data reduced from {len(df1)} rows to {len(df_coe_agg)} rows.")
-
-gdf_merged = gdf_merged.merge(right=df_coe_agg, on="month", how="left")
-
-print(f"✅ Successfully merged COE features based on 'month'.")
-print(f"Final column count: {len(gdf_merged.columns)}")
-gdf_merged.head()
 
 # %% [md]
 # Convert `storey_range` to the median of the lower and upper limit
@@ -289,4 +293,5 @@ pd.set_option("display.max_rows", None)
 pd.DataFrame(gdf_merged.dtypes)
 
 # %%
+gc.collect()
 gdf_merged.to_parquet(DATA_DIR / "final_dataset.parquet")
