@@ -287,15 +287,12 @@ gdf_merged = gdf_merged.drop(
         "street_name",
         "flat_model",
         "lease_commence_date",
-        "full_addr",
         "postal_code",
         "x",
         "y",
         "latitude",
         "longitude",
-        "region",
         "__batch__",
-        "town",
         "storey_range",
     ]
 )
