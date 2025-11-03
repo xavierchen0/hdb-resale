@@ -58,15 +58,15 @@ ADDITIONAL_FEATURE_LIMIT: int = 10
 VIF_THRESHOLD: float = 10.0
 MAX_SAMPLE: int | None = 9_500
 MIN_FEATURES: int = len(MUST_HAVE_FEATURES) + 1
-TEST_MODE: bool = False
-TEST_YEAR: int = 2023
+TEST_MODE: bool = True
+TEST_YEAR: int = 2024
 
 OUTPUT_DIR = DATA_DIR / "model"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 if TEST_MODE:
     YEARS = [TEST_YEAR]
-    MAX_SAMPLE = 2_000
+    MAX_SAMPLE = 10
 
 # %% [md]
 # ## 2. Helper utilities
@@ -343,12 +343,25 @@ for year in tqdm(YEARS, desc="MGWR years"):
     params = pd.DataFrame(
         mgwr_results.params, columns=param_names, index=gdf_year.index
     )
-    std_errors = pd.DataFrame(
-        mgwr_results.se_betas, columns=se_names, index=gdf_year.index
-    )
-    local_r2 = pd.Series(
-        mgwr_results.localR2, name="mgwr_local_r2", index=gdf_year.index
-    )
+
+    if hasattr(mgwr_results, "se_betas") and mgwr_results.se_betas is not None:
+        se_values = mgwr_results.se_betas
+    elif hasattr(mgwr_results, "CCT") and mgwr_results.CCT is not None:
+        se_values = np.sqrt(np.abs(mgwr_results.CCT))
+    else:
+        se_values = np.full_like(mgwr_results.params, np.nan)
+
+    std_errors = pd.DataFrame(se_values, columns=se_names, index=gdf_year.index)
+
+    if hasattr(mgwr_results, "localR2"):
+        try:
+            local_r2_values = mgwr_results.localR2
+        except Exception:
+            local_r2_values = np.full((len(gdf_year),), np.nan)
+    else:
+        local_r2_values = np.full((len(gdf_year),), np.nan)
+
+    local_r2 = pd.Series(local_r2_values, name="mgwr_local_r2", index=gdf_year.index)
 
     export_cols = [
         "txn_id",
