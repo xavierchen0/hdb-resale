@@ -70,7 +70,7 @@ MIN_NON_NULL_RATIO = 0.75
 MIN_STD_THRESHOLD = 1e-4
 USE_LOG_TARGET = True
 MAX_DIFF = 2
-USE_SEASONAL = True
+USE_SEASONAL = False
 SEASONAL_PERIOD = 12
 SEASONAL_DIFF = 1
 MAX_P = 3
@@ -306,7 +306,7 @@ print(f"Suggested differencing order d = {d_estimate}")
 # %%
 order_candidates = sarimax_order_grid_search(
     ts_df[TARGET_COL],
-    d=d_estimate,
+    d=1,
     seasonal=USE_SEASONAL,
     seasonal_period=SEASONAL_PERIOD,
     seasonal_d=SEASONAL_DIFF if USE_SEASONAL else 0,
@@ -441,6 +441,29 @@ exog_train = X_train_scaled if selected_cols else None
 exog_test = X_test_scaled[selected_cols] if selected_cols else None
 print(f"Using all {len(selected_cols)} exogenous features for ARIMAX fit.")
 
+# %%
+results = []
+d = 1
+for q in range(4):
+    for p in range(0, 4):
+        test_model = fit_sarimax_model(
+            y_train,
+            exog_train,
+            order=(p, d, q),
+            seasonal_order=BEST_SEASONAL_ORDER,
+        )
+        results.append({"order": (p, d, q), "aic": test_model.aic})
+
+order_candidates = pd.DataFrame(results)
+order_candidates["aic"] = order_candidates["aic"].astype("float64")
+order_candidates = order_candidates.sort_values(by="aic")
+
+BEST_ORDER = tuple(order_candidates.loc[0, "order"])
+
+order_candidates.head()
+
+# %%
+BEST_ORDER = (0, 1, 0)
 final_model = fit_sarimax_model(
     y_train,
     exog_train,
@@ -460,6 +483,8 @@ forecast_res = final_model.get_forecast(
 )
 pred_mean = forecast_res.predicted_mean
 conf_int = forecast_res.conf_int()
+se = forecast_res.se_mean
+ci_width = conf_int.iloc[:, 1] - conf_int.iloc[:, 0]
 
 if USE_LOG_TARGET:
     y_test_eval = np.exp(y_test)
@@ -475,6 +500,8 @@ mape = mean_absolute_percentage_error(y_test_eval, pred_eval)
 print(f"RMSE: {rmse:,.2f}")
 print(f"MAE: {mae:,.2f}")
 print(f"MAPE: {100 * mape:.2f}%")
+print(f"Mean CI: {ci_width.mean():.4f}")
+print(f"Mean Variance: {(se**2).mean():.6f}")
 
 # %%
 plt.figure(figsize=(12, 4))
@@ -519,3 +546,80 @@ diagnostics
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 final_model.save(str(MODEL_EXPORT_PATH))
 print(f"Exported SARIMAX model to {MODEL_EXPORT_PATH}")
+
+# %%
+# ----------------------------
+# 3. forecast on test set
+# ----------------------------
+pred = final_model.get_forecast(steps=12, exog=X_test_scaled)
+y_pred = pred.predicted_mean
+y_pred_ci = pred.conf_int()
+
+# ----------------------------
+# 4. make a nice metrics table
+# ----------------------------
+mae = mean_absolute_error(y_test, y_pred)
+rmse = mean_squared_error(y_test, y_pred)
+mape = (
+    np.abs((y_test - y_pred) / y_test).replace([np.inf, -np.inf], np.nan)
+).mean() * 100
+
+metrics_df = pd.DataFrame(
+    {
+        "MAE": [mae],
+        "RMSE": [rmse],
+        "MAPE (%)": [mape],
+        "AIC (train)": [final_model.aic],
+        "BIC (train)": [final_model.bic],
+    }
+)
+print(metrics_df.style.format("{:.4f}").set_caption("ARIMAX Performance"))
+
+# ----------------------------
+# 5. plot actual vs forecast
+# ----------------------------
+plt.figure(figsize=(12, 5))
+plt.plot(y_train.index, y_train, label="Train", alpha=0.7)
+plt.plot(y_test.index, y_test, label="Actual (Test)", marker="o")
+plt.plot(y_pred.index, y_pred, label="Forecast", marker="o")
+
+# optional: confidence interval
+plt.fill_between(
+    y_pred_ci.index,
+    y_pred_ci.iloc[:, 0],
+    y_pred_ci.iloc[:, 1],
+    color="gray",
+    alpha=0.2,
+    label="95% CI",
+)
+
+plt.title("ARIMAX Actual vs Forecast")
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# %% [md]
+# Table of results
+
+# %%
+y_pred = pred.predicted_mean
+ci = pred.conf_int()  # dataframe with lower/upper
+se = pred.se_mean  # standard error of forecast
+var = se**2  # <-- variance
+
+# build nice table
+results_df = pd.DataFrame(
+    {
+        "actual": y_test,
+        "forecast": y_pred,
+        "error": y_test - y_pred,
+        "ci_lower": ci.iloc[:, 0],
+        "ci_upper": ci.iloc[:, 1],
+        "forecast_se": se,
+        "forecast_var": var,
+    }
+)
+
+# optional: round for display
+results_df = results_df.round(4)
+print(results_df)
