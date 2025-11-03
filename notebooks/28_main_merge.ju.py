@@ -264,6 +264,21 @@ gdf_merged["storey_median"] = (
 gdf_merged[["storey_range", "storey_median"]]
 
 # %% [md]
+# One-hot encode `flat_type` for downstream models
+# <br>
+# and drop `flat_type_1 ROOM`
+# %%
+flat_type_dummies = pd.get_dummies(
+    gdf_merged["flat_type"],
+    prefix="flat_type",
+    dtype="uint8",
+)
+gdf_merged = gdf_merged.join(flat_type_dummies)
+gdf_merged = gdf_merged.drop(columns=["flat_type", "flat_type_1 ROOM"])
+del flat_type_dummies
+gc.collect()
+
+# %% [md]
 # Drop a few unnecessary cols
 # %%
 gdf_merged = gdf_merged.drop(
