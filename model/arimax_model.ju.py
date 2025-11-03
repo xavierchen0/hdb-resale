@@ -142,11 +142,9 @@ if {"resale_price", "floor_area_sqm"} - set(df_raw.columns):
     missing = {"resale_price", "floor_area_sqm"} - set(df_raw.columns)
     raise KeyError(f"Missing required columns for price-per-sqm target: {missing}")
 
-df_raw = df_raw[df_raw["floor_area_sqm"] > 0].copy()
-df_raw["price_per_sqm"] = df_raw["resale_price"] / df_raw["floor_area_sqm"]
-df_raw["price_per_sqm"].replace([np.inf, -np.inf], np.nan, inplace=True)
-df_raw = df_raw.dropna(subset=["price_per_sqm"])
+df_raw["price_per_sqm"] = np.log(df_raw["resale_price"] / df_raw["floor_area_sqm"])
 df_raw.drop(columns=["resale_price", "floor_area_sqm"], inplace=True)
+df_raw
 
 # %%
 missing_summary = (
@@ -218,13 +216,6 @@ ts_df.head()
 # %%
 ts_df[[TARGET_COL]].plot(figsize=(12, 4), title="Monthly HDB Resale Price Target")
 plt.tight_layout()
-
-# %%
-if USE_LOG_TARGET:
-    if (ts_df[TARGET_COL] <= 0).any():
-        raise ValueError("Log transform requested but target has non-positive values.")
-    ts_df[TARGET_COL] = np.log(ts_df[TARGET_COL])
-    print("Applied natural log transform to target.")
 
 # %% [md]
 # ## 4. Stationarity Diagnostics & Order Selection Helpers
