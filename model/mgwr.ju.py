@@ -44,13 +44,18 @@ from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from tqdm.auto import tqdm
 
+import warnings
+
+# Ignore all warnings
+warnings.filterwarnings("ignore")
+
 project_root = Path().resolve().parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from src.config import DATA_DIR  # noqa: E402
 
-YEARS: Sequence[int] = tuple(range(2017, 2026))
+YEARS: Sequence[int] = tuple(range(2024, 2019, -1))
 FEATURE_LIMIT_BEFORE_VIF: int | None = 40
 VIF_THRESHOLD: float = 10.0
 MAX_SAMPLE: int | None = None
