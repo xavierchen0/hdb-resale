@@ -2,9 +2,10 @@
 # # MGWR Modelling Across Years (2017–2025)
 #
 # This notebook-style script prepares yearly slices of the feature-enriched HDB resale dataset,
-# prunes collinear predictors via VIF, scales the design matrix, and fits Multiscale Geographically
-# Weighted Regression (MGWR) models for each calendar year from 2017 through 2025. Local parameter
-# estimates and diagnostics are persisted for downstream spatial analysis.
+# prunes collinear predictors via correlation filtering and VIF, scales the design matrix, and fits
+# Multiscale Geographically Weighted Regression (MGWR) models for each calendar year from 2017
+# through 2025. Local parameter estimates and diagnostics are persisted for downstream spatial
+# analysis.
 
 # %% [md]
 # ## Quick sanity test (optional)
@@ -21,6 +22,7 @@
 # %% [md]
 # ## 1. Imports and configuration
 # - `YEARS`: modelling horizon.
+# - `FEATURE_LIMIT_BEFORE_VIF`: number of top correlated features to retain before VIF screening.
 # - `VIF_THRESHOLD`: maximum acceptable VIF before dropping a feature.
 # - `MAX_SAMPLE`: optional cap on rows per year (set to `None` to keep all observations).
 # - `OUTPUT_DIR`: where parquet/CSV outputs are written.
@@ -49,10 +51,11 @@ if str(project_root) not in sys.path:
 from src.config import DATA_DIR  # noqa: E402
 
 YEARS: Sequence[int] = tuple(range(2017, 2026))
+FEATURE_LIMIT_BEFORE_VIF: int | None = 40
 VIF_THRESHOLD: float = 10.0
 MAX_SAMPLE: int | None = None
 MIN_FEATURES: int = 2
-TEST_MODE: bool = True
+TEST_MODE: bool = False
 TEST_YEAR: int = 2023
 TEST_FEATURE_LIMIT: int = 5
 
@@ -67,7 +70,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 #
 # - `clean_feature_frame`: keeps numeric predictors, drops constants, handles infs/NaNs.
 # - `select_features_with_vif`: iteratively removes features above the VIF threshold.
-# - `prepare_design_matrices`: coordinates the scaling, VIF filtering, and returns matrices.
+# - `prepare_design_matrices`: correlation-filter → scale → VIF prune → return matrices + metadata.
 
 
 # %%
@@ -77,7 +80,8 @@ class VIFResult:
     kept_features: List[str]
     vif_series: pd.Series
     dropped: List[Dict[str, object]]
-    initial_count: int
+    numeric_count: int
+    pre_vif_count: int
 
 
 def clean_feature_frame(df: pd.DataFrame, drop_cols: Iterable[str]) -> pd.DataFrame:
@@ -97,10 +101,11 @@ def select_features_with_vif(
     X_scaled: np.ndarray,
     feature_names: List[str],
     threshold: float,
+    numeric_count: int,
 ) -> VIFResult:
     remaining = list(range(X_scaled.shape[1]))
     dropped: List[Dict[str, object]] = []
-    initial_count = len(feature_names)
+    pre_vif_count = len(feature_names)
 
     while remaining:
         X_curr = X_scaled[:, remaining]
@@ -115,7 +120,8 @@ def select_features_with_vif(
                 [feature_names[i] for i in remaining],
                 vif_vals,
                 dropped,
-                initial_count,
+                numeric_count,
+                pre_vif_count,
             )
 
         try:
@@ -154,7 +160,8 @@ def select_features_with_vif(
                 [feature_names[i] for i in remaining],
                 vif_series,
                 dropped,
-                initial_count,
+                numeric_count,
+                pre_vif_count,
             )
 
         drop_idx_local = int(np.argmax(vif_array))
@@ -173,21 +180,43 @@ def select_features_with_vif(
 def prepare_design_matrices(
     gdf_year: gpd.GeoDataFrame,
     drop_cols: Iterable[str],
+    target: pd.Series,
     vif_threshold: float,
+    feature_limit: int | None,
 ) -> Tuple[np.ndarray, List[str], StandardScaler, VIFResult]:
-    feature_df = clean_feature_frame(gdf_year, drop_cols)
-    if feature_df.empty:
+    numeric_df = clean_feature_frame(gdf_year, drop_cols)
+    if numeric_df.empty:
         raise ValueError("No numeric features available after cleaning.")
 
-    scaler = StandardScaler()
-    X_scaled_all = scaler.fit_transform(feature_df.to_numpy())
-    feature_names = list(feature_df.columns)
+    numeric_count = numeric_df.shape[1]
+
+    corr_scores = numeric_df.apply(lambda col: col.corr(target, method="spearman"))
+    corr_scores = corr_scores.abs().dropna().sort_values(ascending=False)
+    if corr_scores.empty:
+        raise ValueError("All features were dropped during correlation screening.")
+
+    ordered_cols = corr_scores.index.tolist()
+    if feature_limit is not None and len(ordered_cols) > feature_limit:
+        ordered_cols = ordered_cols[:feature_limit]
+
+    candidate_df = numeric_df[ordered_cols]
 
     if TEST_MODE:
-        feature_names = feature_names[:TEST_FEATURE_LIMIT]
-        X_scaled_all = X_scaled_all[:, :TEST_FEATURE_LIMIT]
+        candidate_df = candidate_df.iloc[:, :TEST_FEATURE_LIMIT]
+        ordered_cols = candidate_df.columns.tolist()
 
-    vif_result = select_features_with_vif(X_scaled_all, feature_names, vif_threshold)
+    if candidate_df.shape[1] < MIN_FEATURES:
+        raise ValueError(
+            f"Insufficient features after correlation filtering (found {candidate_df.shape[1]})."
+        )
+
+    scaler = StandardScaler()
+    X_scaled_all = scaler.fit_transform(candidate_df.to_numpy())
+    feature_names = list(candidate_df.columns)
+
+    vif_result = select_features_with_vif(
+        X_scaled_all, feature_names, vif_threshold, numeric_count
+    )
 
     selected_matrix = X_scaled_all[:, vif_result.selected_idx]
     selected_features = [feature_names[i] for i in vif_result.selected_idx]
@@ -236,21 +265,28 @@ for year in tqdm(YEARS, desc="MGWR years"):
         gdf_year = gdf_year.sample(n=MAX_SAMPLE, random_state=42).sort_values("month")
         tqdm.write(f"[info] {year}: sampled down to {len(gdf_year):,} observations")
 
+    target_log = np.log(gdf_year["resale_price"])
+
     try:
-        X_scaled, feature_names, scaler, vif_info = prepare_design_matrices(
-            gdf_year, DROP_COLUMNS, VIF_THRESHOLD
+        X_scaled, selected_features, scaler, vif_info = prepare_design_matrices(
+            gdf_year,
+            DROP_COLUMNS,
+            target_log,
+            VIF_THRESHOLD,
+            FEATURE_LIMIT_BEFORE_VIF,
         )
     except ValueError as err:
         tqdm.write(f"[skip] {year}: {err}")
         continue
 
     tqdm.write(
-        f"[year {year}] obs={len(gdf_year):,}, initial_feats={vif_info.initial_count}, "
-        f"kept={len(feature_names)}, dropped={len(vif_info.dropped)}"
+        f"[year {year}] obs={len(gdf_year):,}, numeric={vif_info.numeric_count}, "
+        f"candidates={vif_info.pre_vif_count}, kept={len(selected_features)}, "
+        f"dropped_vif={len(vif_info.dropped)}"
     )
 
     coords = np.column_stack([gdf_year.geometry.x, gdf_year.geometry.y])
-    y = np.log(gdf_year["resale_price"].to_numpy()).reshape(-1, 1)
+    y = target_log.to_numpy().reshape(-1, 1)
 
     selector = Sel_BW(coords, y, X_scaled, multi=True, constant=True)
     bandwidths = selector.search()
@@ -266,8 +302,8 @@ for year in tqdm(YEARS, desc="MGWR years"):
     )
     mgwr_results = mgwr_model.fit()
 
-    param_names = ["mgwr_intercept"] + [f"mgwr_{col}" for col in feature_names]
-    se_names = ["mgwr_se_intercept"] + [f"mgwr_se_{col}" for col in feature_names]
+    param_names = ["mgwr_intercept"] + [f"mgwr_{col}" for col in selected_features]
+    se_names = ["mgwr_se_intercept"] + [f"mgwr_se_{col}" for col in selected_features]
 
     params = pd.DataFrame(
         mgwr_results.params, columns=param_names, index=gdf_year.index
@@ -279,7 +315,7 @@ for year in tqdm(YEARS, desc="MGWR years"):
         mgwr_results.localR2, name="mgwr_local_r2", index=gdf_year.index
     )
 
-    export_cols = ["txn_id", "month", "resale_price", "geometry"] + feature_names
+    export_cols = ["txn_id", "month", "resale_price", "geometry"] + selected_features
     export_gdf = gdf_year[export_cols].join(params).join(std_errors).join(local_r2)
 
     year_dir = OUTPUT_DIR / f"mgwr_{year}"
@@ -296,8 +332,9 @@ for year in tqdm(YEARS, desc="MGWR years"):
         {
             "year": year,
             "observations": len(gdf_year),
-            "features_initial": vif_info.initial_count,
-            "features_retained": len(feature_names),
+            "features_numeric": vif_info.numeric_count,
+            "features_candidates": vif_info.pre_vif_count,
+            "features_retained": len(selected_features),
             "features_dropped_vif": len(vif_info.dropped),
             "bandwidth_min": float(np.min(bandwidths)),
             "bandwidth_max": float(np.max(bandwidths)),
