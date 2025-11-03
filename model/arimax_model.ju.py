@@ -20,17 +20,15 @@
 # %%
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import dataclass
 from itertools import product
 from pathlib import Path
 import sys
-from typing import Iterable, Optional, Sequence
+from typing import Iterable, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 from scipy.stats import jarque_bera
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
@@ -56,7 +54,7 @@ pd.set_option("display.width", 220)
 
 DATA_PATH = DATA_DIR / "final_dataset.parquet"
 DATE_COL = "month"
-TARGET_COL = "price_per_sqm"
+TARGET_COL = "log_price_per_sqm"
 DROP_COLUMNS = {
     "txn_id",
     "geometry",
@@ -92,7 +90,6 @@ MUST_KEEP_FEATURES: Sequence[str] = (
     "flat_type_EXECUTIVE",
     "flat_type_MULTI-GENERATION",
 )
-USE_LOG_TARGET = True
 MAX_DIFF = 2
 USE_SEASONAL = False
 SEASONAL_PERIOD = 12
@@ -113,20 +110,12 @@ MODEL_EXPORT_PATH = MODEL_DIR / "arimax_model.pkl"
 def load_dataset(
     path: Path, date_col: str, drop_columns: Iterable[str]
 ) -> pd.DataFrame:
-    """Read the feature-enriched dataset and return a pandas DataFrame."""
-    try:
-        import geopandas as gpd
-
-        df = gpd.read_parquet(path)
-        if hasattr(df, "geometry"):
-            df = df.drop(columns=["geometry"], errors="ignore")
-    except Exception:
-        df = pd.read_parquet(path)
-
-    df = pd.DataFrame(df)  # ensure plain DataFrame
+    df = pd.read_parquet(path)
+    if "geometry" in df.columns:
+        df = df.drop(columns=["geometry"])
     cols_to_drop = set(drop_columns) & set(df.columns)
     if cols_to_drop:
-        df = df.drop(columns=list(cols_to_drop), errors="ignore")
+        df = df.drop(columns=list(cols_to_drop))
     df = df.drop_duplicates()
     if date_col not in df.columns:
         raise KeyError(f"'{date_col}' not found in columns: {df.columns.tolist()}")
@@ -138,12 +127,14 @@ print(f"Loaded shape: {df_raw.shape}")
 df_raw.head()
 
 # %%
-if {"resale_price", "floor_area_sqm"} - set(df_raw.columns):
-    missing = {"resale_price", "floor_area_sqm"} - set(df_raw.columns)
+required_cols = {"resale_price", "floor_area_sqm"}
+missing = required_cols - set(df_raw.columns)
+if missing:
     raise KeyError(f"Missing required columns for price-per-sqm target: {missing}")
 
-df_raw["price_per_sqm"] = np.log(df_raw["resale_price"] / df_raw["floor_area_sqm"])
-df_raw.drop(columns=["resale_price", "floor_area_sqm"], inplace=True)
+df_raw["price_per_sqm"] = df_raw["resale_price"] / df_raw["floor_area_sqm"]
+df_raw[TARGET_COL] = np.log(df_raw["price_per_sqm"])
+df_raw = df_raw.drop(columns=["resale_price", "price_per_sqm"])
 df_raw
 
 # %%
@@ -214,7 +205,8 @@ ts_df = build_monthly_panel(
 ts_df.head()
 
 # %%
-ts_df[[TARGET_COL]].plot(figsize=(12, 4), title="Monthly HDB Resale Price Target")
+ts_df_price = np.exp(ts_df[TARGET_COL]).rename("price_per_sqm")
+ts_df_price.to_frame().plot(figsize=(12, 4), title="Monthly HDB Resale Price Target")
 plt.tight_layout()
 
 # %% [md]
@@ -222,30 +214,14 @@ plt.tight_layout()
 
 
 # %%
-def safe_adf(series: pd.Series) -> dict:
-    result = {"adf_stat": np.nan, "p_value": np.nan, "lags": np.nan, "nobs": np.nan}
-    try:
-        stat, pval, usedlag, nobs, *_ = adfuller(
-            series.dropna(), autolag="AIC", maxlag=12
-        )
-        result.update(
-            {"adf_stat": stat, "p_value": pval, "lags": usedlag, "nobs": nobs}
-        )
-    except Exception as exc:
-        result["error"] = str(exc)
-    return result
+def adf_summary(series: pd.Series) -> dict:
+    stat, pval, usedlag, nobs, *_ = adfuller(series.dropna(), autolag="AIC", maxlag=12)
+    return {"adf_stat": stat, "p_value": pval, "lags": usedlag, "nobs": nobs}
 
 
-def safe_kpss(series: pd.Series, regression: str = "c") -> dict:
-    result = {"kpss_stat": np.nan, "p_value": np.nan, "lags": np.nan}
-    try:
-        stat, pval, nlags, *_ = kpss(
-            series.dropna(), regression=regression, nlags="auto"
-        )
-        result.update({"kpss_stat": stat, "p_value": pval, "lags": nlags})
-    except Exception as exc:
-        result["error"] = str(exc)
-    return result
+def kpss_summary(series: pd.Series, regression: str = "c") -> dict:
+    stat, pval, nlags, *_ = kpss(series.dropna(), regression=regression, nlags="auto")
+    return {"kpss_stat": stat, "p_value": pval, "lags": nlags}
 
 
 def estimate_d(series: pd.Series, max_d: int) -> int:
@@ -255,10 +231,10 @@ def estimate_d(series: pd.Series, max_d: int) -> int:
             candidate = series
         else:
             candidate = series.diff(d).dropna()
-        adf_res = safe_adf(candidate)
-        kpss_res = safe_kpss(candidate)
-        adf_ok = adf_res["p_value"] is not np.nan and adf_res["p_value"] < 0.05
-        kpss_ok = kpss_res["p_value"] is not np.nan and kpss_res["p_value"] > 0.05
+        adf_res = adf_summary(candidate)
+        kpss_res = kpss_summary(candidate)
+        adf_ok = not np.isnan(adf_res["p_value"]) and adf_res["p_value"] < 0.05
+        kpss_ok = not np.isnan(kpss_res["p_value"]) and kpss_res["p_value"] > 0.05
         if adf_ok and kpss_ok:
             return d
     return max_d
@@ -291,26 +267,23 @@ def sarimax_order_grid_search(
         seasonal_order = (
             (P, seasonal_d, Q, seasonal_period) if seasonal else (0, 0, 0, 0)
         )
-        try:
-            model = SARIMAX(
-                y,
-                order=order,
-                seasonal_order=seasonal_order,
-                enforce_stationarity=False,
-                enforce_invertibility=False,
-            )
-            fit_res = model.fit(disp=False)
-            results.append(
-                {
-                    "order": order,
-                    "seasonal_order": seasonal_order,
-                    "aic": fit_res.aic,
-                    "bic": fit_res.bic,
-                    "converged": fit_res.mle_retvals.get("converged", True),
-                }
-            )
-        except Exception:
-            continue
+        model = SARIMAX(
+            y,
+            order=order,
+            seasonal_order=seasonal_order,
+            enforce_stationarity=False,
+            enforce_invertibility=False,
+        )
+        fit_res = model.fit(disp=False)
+        results.append(
+            {
+                "order": order,
+                "seasonal_order": seasonal_order,
+                "aic": fit_res.aic,
+                "bic": fit_res.bic,
+                "converged": fit_res.mle_retvals.get("converged", True),
+            }
+        )
 
     if not results:
         raise RuntimeError("No SARIMAX models converged during grid search.")
@@ -319,8 +292,8 @@ def sarimax_order_grid_search(
 
 
 stationarity_report = {
-    "adf": safe_adf(ts_df[TARGET_COL]),
-    "kpss": safe_kpss(ts_df[TARGET_COL]),
+    "adf": adf_summary(ts_df[TARGET_COL]),
+    "kpss": kpss_summary(ts_df[TARGET_COL]),
 }
 stationarity_report
 
@@ -446,30 +419,25 @@ print(f"Features available for stepwise selection: {X_train_scaled.shape[1]}")
 @dataclass
 class StepwiseResult:
     selected_features: tuple[str, ...]
-    model: Optional[SARIMAX]
-    fit_result: Optional[object]
+    fit_result: object
     history: list[dict]
 
 
 def fit_sarimax_model(
     endog: pd.Series,
-    exog: Optional[pd.DataFrame],
+    exog: pd.DataFrame | None,
     order: tuple[int, int, int],
     seasonal_order: tuple[int, int, int, int],
-) -> Optional[object]:
-    try:
-        model = SARIMAX(
-            endog,
-            exog=exog,
-            order=order,
-            seasonal_order=seasonal_order,
-            enforce_stationarity=False,
-            enforce_invertibility=False,
-        )
-        result = model.fit(disp=False)
-        return result
-    except Exception:
-        return None
+) -> object:
+    model = SARIMAX(
+        endog,
+        exog=exog,
+        order=order,
+        seasonal_order=seasonal_order,
+        enforce_stationarity=False,
+        enforce_invertibility=False,
+    )
+    return model.fit(disp=False)
 
 
 def stepwise_arimax_selection(
@@ -483,24 +451,21 @@ def stepwise_arimax_selection(
     verbose: bool = True,
 ) -> StepwiseResult:
     must_have = tuple(feat for feat in (must_have or tuple()) if feat in X.columns)
-    cache: dict[tuple[str, ...], Optional[object]] = {}
+    cache: dict[tuple[str, ...], object] = {}
     history: list[dict] = []
 
-    def evaluate(features: Sequence[str]) -> Optional[object]:
+    def evaluate(features: Sequence[str]) -> object:
         key = tuple(features)
         if key in cache:
             return cache[key]
         exog = X[list(key)] if key else None
         result = fit_sarimax_model(y, exog, order, seasonal_order)
         cache[key] = result
-        if result is not None:
-            history.append({"features": key, "aic": result.aic})
+        history.append({"features": key, "aic": result.aic})
         return result
 
     current_features = must_have if must_have else tuple()
     best_model = evaluate(current_features)
-    if best_model is None:
-        raise RuntimeError("Failed to fit baseline ARIMAX model.")
     best_aic = best_model.aic
 
     remaining = [feat for feat in X.columns if feat not in current_features]
@@ -521,8 +486,6 @@ def stepwise_arimax_selection(
         for feat in forward_bar:
             trial = current_features + (feat,)
             result = evaluate(trial)
-            if result is None:
-                continue
             if result.aic + tol < candidate_aic:
                 candidate_aic = result.aic
                 candidate_features = trial
@@ -554,8 +517,6 @@ def stepwise_arimax_selection(
                     continue
                 trial = tuple(f for f in current_features if f != feat)
                 result = evaluate(trial)
-                if result is None:
-                    continue
                 if result.aic + tol < candidate_aic:
                     candidate_aic = result.aic
                     candidate_features = trial
@@ -578,7 +539,6 @@ def stepwise_arimax_selection(
 
     return StepwiseResult(
         selected_features=current_features,
-        model=None,
         fit_result=best_model,
         history=history,
     )
@@ -609,7 +569,7 @@ exog_test = X_test_scaled[selected_cols] if selected_cols else None
 results = []
 d = 1
 for q in range(4):
-    for p in range(1, 4):
+    for p in range(0, 4):
         test_model = fit_sarimax_model(
             y_train,
             exog_train,
@@ -627,57 +587,44 @@ BEST_ORDER = tuple(order_candidates.loc[0, "order"])
 order_candidates.head()
 
 # %%
-BEST_ORDER = (0, 1, 0)
+# BEST_ORDER = (0, 1, 0)
 final_model = fit_sarimax_model(
     y_train,
     exog_train,
     order=BEST_ORDER,
     seasonal_order=BEST_SEASONAL_ORDER,
 )
-
-if final_model is None:
-    raise RuntimeError("Final SARIMAX fit failed.")
-
 print(final_model.summary())
 
 # %%
-forecast_res = final_model.get_forecast(
-    steps=len(y_test),
-    exog=exog_test,
-)
-pred_mean = forecast_res.predicted_mean
-conf_int = forecast_res.conf_int()
-se = forecast_res.se_mean
-ci_width = conf_int.iloc[:, 1] - conf_int.iloc[:, 0]
+forecast_res = final_model.get_forecast(steps=len(y_test), exog=exog_test)
+predicted_log = forecast_res.predicted_mean
+conf_int_log = forecast_res.conf_int()
 
-if USE_LOG_TARGET:
-    y_test_eval = np.exp(y_test)
-    pred_eval = np.exp(pred_mean)
-else:
-    y_test_eval = y_test
-    pred_eval = pred_mean
+y_train_price = np.exp(y_train)
+y_test_price = np.exp(y_test)
+predicted_price = np.exp(predicted_log)
+conf_int_price = np.exp(conf_int_log)
+ci_width = conf_int_price.iloc[:, 1] - conf_int_price.iloc[:, 0]
 
-rmse = mean_squared_error(y_test_eval, pred_eval)
-mae = mean_absolute_error(y_test_eval, pred_eval)
-mape = mean_absolute_percentage_error(y_test_eval, pred_eval)
+rmse = mean_squared_error(y_test_price, predicted_price)
+mae = mean_absolute_error(y_test_price, predicted_price)
+mape = mean_absolute_percentage_error(y_test_price, predicted_price)
 
 print(f"RMSE: {rmse:,.2f}")
 print(f"MAE: {mae:,.2f}")
 print(f"MAPE: {100 * mape:.2f}%")
-print(f"Mean CI: {ci_width.mean():.4f}")
-print(f"Mean Variance: {(se**2).mean():.6f}")
+print(f"Mean CI Width: {ci_width.mean():.2f}")
 
 # %%
 plt.figure(figsize=(12, 4))
-plt.plot(
-    y_train.index, y_train if not USE_LOG_TARGET else np.exp(y_train), label="Train"
-)
-plt.plot(y_test.index, y_test_eval, label="Test Actual", color="black")
-plt.plot(y_test.index, pred_eval, label="Forecast", color="tab:orange")
+plt.plot(y_train.index, y_train_price, label="Train")
+plt.plot(y_test.index, y_test_price, label="Test Actual", color="black")
+plt.plot(y_test.index, predicted_price, label="Forecast", color="tab:orange")
 plt.fill_between(
     y_test.index,
-    conf_int.iloc[:, 0] if not USE_LOG_TARGET else np.exp(conf_int.iloc[:, 0]),
-    conf_int.iloc[:, 1] if not USE_LOG_TARGET else np.exp(conf_int.iloc[:, 1]),
+    conf_int_price.iloc[:, 0],
+    conf_int_price.iloc[:, 1],
     color="tab:orange",
     alpha=0.2,
     label="Confidence Interval",
@@ -712,78 +659,25 @@ final_model.save(str(MODEL_EXPORT_PATH))
 print(f"Exported SARIMAX model to {MODEL_EXPORT_PATH}")
 
 # %%
-# ----------------------------
-# 3. forecast on test set
-# ----------------------------
-pred = final_model.get_forecast(steps=12, exog=X_test_scaled)
-y_pred = pred.predicted_mean
-y_pred_ci = pred.conf_int()
-
-# ----------------------------
-# 4. make a nice metrics table
-# ----------------------------
-mae = mean_absolute_error(y_test, y_pred)
-rmse = mean_squared_error(y_test, y_pred)
-mape = (
-    np.abs((y_test - y_pred) / y_test).replace([np.inf, -np.inf], np.nan)
-).mean() * 100
-
 metrics_df = pd.DataFrame(
     {
         "MAE": [mae],
         "RMSE": [rmse],
-        "MAPE (%)": [mape],
+        "MAPE (%)": [100 * mape],
         "AIC (train)": [final_model.aic],
         "BIC (train)": [final_model.bic],
     }
-)
-print(metrics_df.style.format("{:.4f}").set_caption("ARIMAX Performance"))
-
-# ----------------------------
-# 5. plot actual vs forecast
-# ----------------------------
-plt.figure(figsize=(12, 5))
-plt.plot(y_train.index, y_train, label="Train", alpha=0.7)
-plt.plot(y_test.index, y_test, label="Actual (Test)", marker="o")
-plt.plot(y_pred.index, y_pred, label="Forecast", marker="o")
-
-# optional: confidence interval
-plt.fill_between(
-    y_pred_ci.index,
-    y_pred_ci.iloc[:, 0],
-    y_pred_ci.iloc[:, 1],
-    color="gray",
-    alpha=0.2,
-    label="95% CI",
-)
-
-plt.title("ARIMAX Actual vs Forecast")
-plt.legend()
-plt.tight_layout()
-plt.show()
-
-# %% [md]
-# Table of results
+).round(2)
+print(metrics_df)
 
 # %%
-y_pred = pred.predicted_mean
-ci = pred.conf_int()  # dataframe with lower/upper
-se = pred.se_mean  # standard error of forecast
-var = se**2  # <-- variance
-
-# build nice table
-results_df = pd.DataFrame(
+results_table = pd.DataFrame(
     {
-        "actual": y_test,
-        "forecast": y_pred,
-        "error": y_test - y_pred,
-        "ci_lower": ci.iloc[:, 0],
-        "ci_upper": ci.iloc[:, 1],
-        "forecast_se": se,
-        "forecast_var": var,
+        "actual_price_per_sqm": y_test_price,
+        "forecast_price_per_sqm": predicted_price,
+        "error": y_test_price - predicted_price,
+        "ci_lower": conf_int_price.iloc[:, 0],
+        "ci_upper": conf_int_price.iloc[:, 1],
     }
-)
-
-# optional: round for display
-results_df = results_df.round(4)
-print(results_df)
+).round(2)
+print(results_table)
