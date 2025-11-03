@@ -28,6 +28,7 @@ from mgwr.gwr import MGWR
 from mgwr.sel_bw import Sel_BW
 from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.outliers_influence import variance_inflation_factor
+from tqdm.auto import tqdm
 
 project_root = Path().resolve().parent
 if str(project_root) not in sys.path:
@@ -203,22 +204,28 @@ DROP_COLUMNS = {"txn_id", "resale_price", "month", "geometry", "year"}
 
 run_summaries: List[Dict[str, object]] = []
 
-for year in YEARS:
+for year in tqdm(YEARS, desc="MGWR years"):
     gdf_year = full_gdf[full_gdf["year"] == year].copy()
     if gdf_year.empty:
-        print(f"[skip] No data found for {year}")
+        tqdm.write(f"[skip] {year}: No data found")
         continue
 
     if MAX_SAMPLE is not None and len(gdf_year) > MAX_SAMPLE:
         gdf_year = gdf_year.sample(n=MAX_SAMPLE, random_state=42).sort_values("month")
+        tqdm.write(f"[info] {year}: sampled down to {len(gdf_year):,} observations")
 
     try:
         X_scaled, feature_names, scaler, vif_info = prepare_design_matrices(
             gdf_year, DROP_COLUMNS, VIF_THRESHOLD
         )
     except ValueError as err:
-        print(f"[skip] {year}: {err}")
+        tqdm.write(f"[skip] {year}: {err}")
         continue
+
+    tqdm.write(
+        f"[year {year}] obs={len(gdf_year):,}, initial_feats={vif_info.initial_count}, "
+        f"kept={len(feature_names)}, dropped={len(vif_info.dropped)}"
+    )
 
     coords = np.column_stack([gdf_year.geometry.x, gdf_year.geometry.y])
     y = np.log(gdf_year["resale_price"].to_numpy()).reshape(-1, 1)
@@ -278,18 +285,19 @@ for year in YEARS:
         }
     )
 
-    print(
-        f"[year {year}] obs={len(gdf_year):,}, features={len(feature_names)}, "
-        f"bandwidth range=({np.min(bandwidths):.2f}, {np.max(bandwidths):.2f})"
+    tqdm.write(
+        f"[done {year}] bandwidth range=({np.min(bandwidths):.2f}, {np.max(bandwidths):.2f}), "
+        f"AICc={mgwr_results.aicc:.2f}"
     )
 
 summary_df = pd.DataFrame(run_summaries)
 summary_path = OUTPUT_DIR / "mgwr_run_summary.csv"
 summary_df.to_csv(summary_path, index=False)
 
-print("\nMGWR run summary:")
-print(summary_df)
-print(f"Summary written to {summary_path}")
+tqdm.write("\nMGWR run summary:")
+with pd.option_context("display.max_rows", None, "display.max_columns", None):
+    tqdm.write(summary_df.to_string(index=False))
+tqdm.write(f"Summary written to {summary_path}")
 
 # %% [md]
 # ### Notes
