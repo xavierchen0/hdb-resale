@@ -56,7 +56,7 @@ pd.set_option("display.width", 220)
 
 DATA_PATH = DATA_DIR / "final_dataset.parquet"
 DATE_COL = "month"
-TARGET_COL = "resale_price"
+TARGET_COL = "price_per_sqm"
 DROP_COLUMNS = {
     "txn_id",
     "geometry",
@@ -92,7 +92,7 @@ MUST_KEEP_FEATURES: Sequence[str] = (
     "flat_type_EXECUTIVE",
     "flat_type_MULTI-GENERATION",
 )
-USE_LOG_TARGET = False
+USE_LOG_TARGET = True
 MAX_DIFF = 2
 USE_SEASONAL = True
 SEASONAL_PERIOD = 12
@@ -134,6 +134,17 @@ def load_dataset(
 df_raw = load_dataset(DATA_PATH, DATE_COL, DROP_COLUMNS)
 print(f"Loaded shape: {df_raw.shape}")
 df_raw.head()
+
+# %%
+if {"resale_price", "floor_area_sqm"} - set(df_raw.columns):
+    missing = {"resale_price", "floor_area_sqm"} - set(df_raw.columns)
+    raise KeyError(f"Missing required columns for price-per-sqm target: {missing}")
+
+df_raw = df_raw[df_raw["floor_area_sqm"] > 0].copy()
+df_raw["price_per_sqm"] = df_raw["resale_price"] / df_raw["floor_area_sqm"]
+df_raw["price_per_sqm"].replace([np.inf, -np.inf], np.nan, inplace=True)
+df_raw = df_raw.dropna(subset=["price_per_sqm"])
+df_raw.drop(columns=["resale_price", "floor_area_sqm"], inplace=True)
 
 # %%
 missing_summary = (
