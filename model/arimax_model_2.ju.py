@@ -70,7 +70,7 @@ MIN_NON_NULL_RATIO = 0.75
 MIN_STD_THRESHOLD = 1e-4
 USE_LOG_TARGET = True
 MAX_DIFF = 2
-USE_SEASONAL = True
+USE_SEASONAL = False
 SEASONAL_PERIOD = 12
 SEASONAL_DIFF = 1
 MAX_P = 3
@@ -306,7 +306,7 @@ print(f"Suggested differencing order d = {d_estimate}")
 # %%
 order_candidates = sarimax_order_grid_search(
     ts_df[TARGET_COL],
-    d=d_estimate,
+    d=1,
     seasonal=USE_SEASONAL,
     seasonal_period=SEASONAL_PERIOD,
     seasonal_d=SEASONAL_DIFF if USE_SEASONAL else 0,
@@ -441,6 +441,28 @@ exog_train = X_train_scaled if selected_cols else None
 exog_test = X_test_scaled[selected_cols] if selected_cols else None
 print(f"Using all {len(selected_cols)} exogenous features for ARIMAX fit.")
 
+# %%
+results = []
+d = 1
+for q in range(4):
+    for p in range(1, 4):
+        test_model = fit_sarimax_model(
+            y_train,
+            exog_train,
+            order=(p, d, q),
+            seasonal_order=BEST_SEASONAL_ORDER,
+        )
+        results.append({"order": (p, d, q), "aic": test_model.aic})
+
+order_candidates = pd.DataFrame(results)
+order_candidates["aic"] = order_candidates["aic"].astype("float64")
+order_candidates = order_candidates.sort_values(by="aic")
+
+BEST_ORDER = tuple(order_candidates.loc[0, "order"])
+
+order_candidates.head()
+
+# %%
 final_model = fit_sarimax_model(
     y_train,
     exog_train,
