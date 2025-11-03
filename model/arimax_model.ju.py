@@ -102,6 +102,8 @@ MAX_Q = 3
 MAX_P_SEASONAL = 1
 MAX_Q_SEASONAL = 1
 STEPWISE_TOL = 1e-3
+MODEL_DIR = DATA_DIR / "model"
+MODEL_EXPORT_PATH = MODEL_DIR / "arimax_model.pkl"
 
 # %% [md]
 # ## 2. Data Loading & Basic Checks
@@ -685,3 +687,8 @@ diagnostics = {
     "jarque_bera_pvalue": jb_p,
 }
 diagnostics
+
+# %%
+MODEL_DIR.mkdir(parents=True, exist_ok=True)
+final_model.save(str(MODEL_EXPORT_PATH))
+print(f"Exported SARIMAX model to {MODEL_EXPORT_PATH}")
