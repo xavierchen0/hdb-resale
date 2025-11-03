@@ -119,6 +119,7 @@ df_long.dtypes
 df_long = df_long.reset_index()
 
 # %%
+pd.set_option('display.max_rows', None)
 df_long
 
 # %%
