@@ -1,0 +1,5 @@
+outs:
+- md5: cfb0e322008aab3e636fa01ac938e2cb
+  size: 4067959
+  hash: md5
+  path: arimax2_model.pkl

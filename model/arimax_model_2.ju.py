@@ -3,16 +3,15 @@
 #
 # Builds on the probability, econometrics, and time-series tooling covered in Sessions 1–8
 # to engineer a monthly panel, run diagnostic tests, carry out correlation filtering, and fit
-# an ARIMAX model with stepwise AIC feature selection for Singapore HDB resale prices.
+# an ARIMAX model leveraging the full exogenous feature set for Singapore HDB resale prices.
 
 # %% [md]
 # ## Workflow Outline
 # 1. Load the merged feature dataset and collapse it to a monthly panel.
 # 2. Run preliminary diagnostics (missingness, stationarity tests, ACF/PACF).
 # 3. Select ARIMA orders via a light grid-search after differencing checks.
-# 4. Prepare exogenous features (impute, scale), apply correlation filtering, and restrict the pool.
-# 5. Run stepwise AIC feature selection for ARIMAX.
-# 6. Fit, evaluate, and diagnose the final model; optionally refit on the full sample.
+# 4. Prepare exogenous features (impute, scale), apply correlation filtering, and retain the pool.
+# 5. Fit, evaluate, and diagnose the final model; optionally refit on the full sample.
 
 # %% [md]
 # ## 1. Imports & Configuration
@@ -20,12 +19,10 @@
 # %%
 from __future__ import annotations
 
-from collections import defaultdict
-from dataclasses import dataclass
 from itertools import product
 from pathlib import Path
 import sys
-from typing import Iterable, Optional, Sequence
+from typing import Iterable, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -43,7 +40,6 @@ from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.tsa.stattools import adfuller, kpss
 from statsmodels.tsa.statespace.sarimax import SARIMAX
-from tqdm.auto import tqdm
 
 project_root = Path().resolve().parent
 if str(project_root) not in sys.path:
@@ -72,26 +68,6 @@ MIN_OBS_REQUIRED = 36
 TEST_HORIZON = 12  # last N months kept for evaluation
 MIN_NON_NULL_RATIO = 0.75
 MIN_STD_THRESHOLD = 1e-4
-MAX_FEATURES_STEPWISE = 40
-MUST_KEEP_FEATURES: Sequence[str] = (
-    "floor_area_sqm",
-    "remaining_lease",
-    "distance_to_nearest_mrt_lrt",
-    "distance_to_nearest_prischool",
-    "distance_to_nearest_foodcentre",
-    "distance_to_nearest_hawker",
-    "distance_to_nearest_mall",
-    "distance_to_nearest_preschool",
-    "distance_to_nearest_cc",
-    "distance_to_nearest_park",
-    "storey_median",
-    "flat_type_2 ROOM",
-    "flat_type_3 ROOM",
-    "flat_type_4 ROOM",
-    "flat_type_5 ROOM",
-    "flat_type_EXECUTIVE",
-    "flat_type_MULTI-GENERATION",
-)
 USE_LOG_TARGET = True
 MAX_DIFF = 2
 USE_SEASONAL = True
@@ -101,9 +77,8 @@ MAX_P = 3
 MAX_Q = 3
 MAX_P_SEASONAL = 1
 MAX_Q_SEASONAL = 1
-STEPWISE_TOL = 1e-3
 MODEL_DIR = DATA_DIR / "model"
-MODEL_EXPORT_PATH = MODEL_DIR / "arimax_model.pkl"
+MODEL_EXPORT_PATH = MODEL_DIR / "arimax2_model.pkl"
 
 # %% [md]
 # ## 2. Data Loading & Basic Checks
@@ -414,13 +389,6 @@ X_test_imputed = pd.DataFrame(
     columns=X_test_raw.columns,
 )
 
-protected = [feat for feat in MUST_KEEP_FEATURES if feat in X_train_imputed.columns]
-missing_protected = [
-    feat for feat in MUST_KEEP_FEATURES if feat not in X_train_imputed.columns
-]
-if missing_protected:
-    print("Warning: required features not found and excluded:", missing_protected)
-
 X_train_prepared = X_train_imputed
 X_test_prepared = X_test_imputed[X_train_prepared.columns]
 
@@ -436,21 +404,13 @@ X_test_scaled = pd.DataFrame(
     columns=X_test_prepared.columns,
 )
 
-print(f"Features available for stepwise selection: {X_train_scaled.shape[1]}")
+print(f"Exogenous features available for ARIMAX: {X_train_scaled.shape[1]}")
 
 # %% [md]
-# ## 6. Stepwise AIC Feature Selection for ARIMAX
+# ## 6. Fit ARIMAX without Feature Selection
 
 
 # %%
-@dataclass
-class StepwiseResult:
-    selected_features: tuple[str, ...]
-    model: Optional[SARIMAX]
-    fit_result: Optional[object]
-    history: list[dict]
-
-
 def fit_sarimax_model(
     endog: pd.Series,
     exog: Optional[pd.DataFrame],
@@ -472,138 +432,14 @@ def fit_sarimax_model(
         return None
 
 
-def stepwise_arimax_selection(
-    y: pd.Series,
-    X: pd.DataFrame,
-    order: tuple[int, int, int],
-    seasonal_order: tuple[int, int, int, int],
-    must_have: Iterable[str] | None = None,
-    max_features: int = 10,
-    tol: float = 1e-3,
-    verbose: bool = True,
-) -> StepwiseResult:
-    must_have = tuple(feat for feat in (must_have or tuple()) if feat in X.columns)
-    cache: dict[tuple[str, ...], Optional[object]] = {}
-    history: list[dict] = []
-
-    def evaluate(features: Sequence[str]) -> Optional[object]:
-        key = tuple(features)
-        if key in cache:
-            return cache[key]
-        exog = X[list(key)] if key else None
-        result = fit_sarimax_model(y, exog, order, seasonal_order)
-        cache[key] = result
-        if result is not None:
-            history.append({"features": key, "aic": result.aic})
-        return result
-
-    current_features = must_have if must_have else tuple()
-    best_model = evaluate(current_features)
-    if best_model is None:
-        raise RuntimeError("Failed to fit baseline ARIMAX model.")
-    best_aic = best_model.aic
-
-    remaining = [feat for feat in X.columns if feat not in current_features]
-    improved = True
-
-    while improved and len(current_features) < max_features:
-        improved = False
-        candidate_features = current_features
-        candidate_model = best_model
-        candidate_aic = best_aic
-
-        forward_bar = tqdm(
-            remaining,
-            desc=f"Forward search (k={len(current_features)})",
-            leave=False,
-            disable=not verbose,
-        )
-        for feat in forward_bar:
-            trial = current_features + (feat,)
-            result = evaluate(trial)
-            if result is None:
-                continue
-            if result.aic + tol < candidate_aic:
-                candidate_aic = result.aic
-                candidate_features = trial
-                candidate_model = result
-                if verbose:
-                    forward_bar.set_postfix(best_aic=f"{candidate_aic:.2f}", add=feat)
-        forward_bar.close()
-
-        if candidate_aic + tol < best_aic:
-            current_features = candidate_features
-            best_model = candidate_model
-            best_aic = candidate_aic
-            remaining = [feat for feat in X.columns if feat not in current_features]
-            improved = True
-            if verbose:
-                tqdm.write(f"Forward step -> {current_features} | AIC={best_aic:.2f}")
-            continue
-
-        # Backward step
-        if len(current_features) > len(must_have):
-            backward_bar = tqdm(
-                [feat for feat in current_features if feat not in must_have],
-                desc=f"Backward search (k={len(current_features)})",
-                leave=False,
-                disable=not verbose,
-            )
-            for feat in backward_bar:
-                if feat in must_have:
-                    continue
-                trial = tuple(f for f in current_features if f != feat)
-                result = evaluate(trial)
-                if result is None:
-                    continue
-                if result.aic + tol < candidate_aic:
-                    candidate_aic = result.aic
-                    candidate_features = trial
-                    candidate_model = result
-                    if verbose:
-                        backward_bar.set_postfix(
-                            best_aic=f"{candidate_aic:.2f}", drop=feat
-                        )
-            backward_bar.close()
-            if candidate_aic + tol < best_aic:
-                current_features = candidate_features
-                best_model = candidate_model
-                best_aic = candidate_aic
-                remaining = [feat for feat in X.columns if feat not in current_features]
-                improved = True
-                if verbose:
-                    tqdm.write(
-                        f"Backward step -> {current_features} | AIC={best_aic:.2f}"
-                    )
-
-    return StepwiseResult(
-        selected_features=current_features,
-        model=None,
-        fit_result=best_model,
-        history=history,
-    )
-
-
-stepwise_result = stepwise_arimax_selection(
-    y_train,
-    X_train_scaled,
-    order=BEST_ORDER,
-    seasonal_order=BEST_SEASONAL_ORDER,
-    must_have=MUST_KEEP_FEATURES,
-    max_features=MAX_FEATURES_STEPWISE,
-    tol=STEPWISE_TOL,
-    verbose=True,
-)
-
-print(f"Selected features: {stepwise_result.selected_features}")
-
 # %% [md]
 # ## 7. Fit Final Model & Evaluate
 
 # %%
-selected_cols = list(stepwise_result.selected_features)
-exog_train = X_train_scaled[selected_cols] if selected_cols else None
+selected_cols = X_train_scaled.columns.tolist()
+exog_train = X_train_scaled if selected_cols else None
 exog_test = X_test_scaled[selected_cols] if selected_cols else None
+print(f"Using all {len(selected_cols)} exogenous features for ARIMAX fit.")
 
 final_model = fit_sarimax_model(
     y_train,
