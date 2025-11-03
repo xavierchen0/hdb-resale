@@ -298,6 +298,56 @@ gdf_merged = gdf_merged.drop(
 )
 
 # %% [md]
+# Keep a few cols
+
+# %%
+gdf_merged = gdf_merged[
+    [
+        "floor_area_sqm",
+        "resale_price",
+        "remaining_lease",
+        "distance_to_nearest_park",
+        "parks_access",
+        "ppi_non_landed",
+        "coe_a",
+        "coe_b",
+        "marriage_rate",
+        "inc_mem_pct_change",
+        "distance_to_nearest_mrt_lrt",
+        "distance_to_nearest_sports",
+        "sports_access",
+        "distance_to_nearest_prischool",
+        "prischool_access",
+        "distance_to_nearest_foodcentre",
+        "foodcentre_access",
+        "birth_rate",
+        "distance_to_nearest_hawker",
+        "hawker_access",
+        "distance_to_nearest_secschool",
+        "secschool_access",
+        "distance_to_nearest_mall",
+        "mall_access",
+        "distance_to_nearest_preschool",
+        "preschool_access",
+        "unemp_rate",
+        "cpi_index",
+        "distance_to_nearest_cc",
+        "cc_access",
+        "sora",
+        "ssd_max_rate",
+        "ssd_max_hold_yrs",
+        "bsd_max_rate_res",
+        "sg_absd_2",
+        "sg_absd_3",
+        "pr_absd_1",
+        "pr_absd_2",
+        "pr_absd_3",
+        "tdsr",
+        "storey_median",
+    ]
+]
+
+# %% [md]
 # final set of cols
 
 # %%
