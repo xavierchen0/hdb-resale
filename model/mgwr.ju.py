@@ -7,6 +7,18 @@
 # estimates and diagnostics are persisted for downstream spatial analysis.
 
 # %% [md]
+# ## Quick sanity test (optional)
+# Uncomment and set `TEST_MODE = True` to run a lightweight check on a single year with the first
+# few features (useful for verifying that MGWR runs end-to-end before launching the full loop).
+#
+# ```python
+# TEST_MODE = True
+# TEST_YEAR = 2023
+# TEST_FEATURE_LIMIT = 5
+# YEARS = [TEST_YEAR]
+# ```
+
+# %% [md]
 # ## 1. Imports and configuration
 # - `YEARS`: modelling horizon.
 # - `VIF_THRESHOLD`: maximum acceptable VIF before dropping a feature.
@@ -40,6 +52,12 @@ YEARS: Sequence[int] = tuple(range(2017, 2026))
 VIF_THRESHOLD: float = 10.0
 MAX_SAMPLE: int | None = None
 MIN_FEATURES: int = 2
+TEST_MODE: bool = True
+TEST_YEAR: int = 2023
+TEST_FEATURE_LIMIT: int = 5
+
+if TEST_MODE:
+    YEARS = [TEST_YEAR]
 
 OUTPUT_DIR = DATA_DIR / "model"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -164,6 +182,10 @@ def prepare_design_matrices(
     scaler = StandardScaler()
     X_scaled_all = scaler.fit_transform(feature_df.to_numpy())
     feature_names = list(feature_df.columns)
+
+    if TEST_MODE:
+        feature_names = feature_names[:TEST_FEATURE_LIMIT]
+        X_scaled_all = X_scaled_all[:, :TEST_FEATURE_LIMIT]
 
     vif_result = select_features_with_vif(X_scaled_all, feature_names, vif_threshold)
 
