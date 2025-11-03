@@ -303,6 +303,8 @@ gdf_merged = gdf_merged.drop(
 # %%
 gdf_merged = gdf_merged[
     [
+        "txn_id",
+        "month",
         "floor_area_sqm",
         "resale_price",
         "remaining_lease",
@@ -344,6 +346,7 @@ gdf_merged = gdf_merged[
         "pr_absd_3",
         "tdsr",
         "storey_median",
+        "dist_to_cbd",
     ]
 ]
 
